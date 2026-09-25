@@ -1,0 +1,17 @@
+export const API_LINK = {
+  Login: "auth/login",
+  Company: "company",
+  CompanyDetails: (id) => `company/${id}`,
+  CompanyStatus: (id) => `company/${id}/status`,
+  Outlet: "outlet",
+  OutletDetails: (id) => `outlet/${id}`,
+  OutletStatus: (id) => `outlet/${id}/status`,
+  Staff: "staff",
+  StaffDetails: (id) => `staff/${id}`,
+  StaffStatus: (id) => `staff/${id}/status`,
+  Menu: "menu",
+  MenuDetails: (id) => `menu/${id}`,
+  MenuStatus: (id) => `menu/${id}/status`,
+  MenuItem: "menu-item",
+  MenuItemDetails: (id) => `menu-item/${id}`,
+};

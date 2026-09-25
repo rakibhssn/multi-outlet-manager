@@ -1,0 +1,161 @@
+const prisma = require("../config/prisma");
+const response = require("./Response");
+const branch = require("./Branch");
+
+const COMPANY_ACCOUNT = { role: "SUPER_ADMIN", accountType: "HEADQUARTER" };
+const companyOnly = { parentId: null, ...branch.withoutDeveloper };
+
+class Company {
+  async list(req, res) {
+    try {
+      const page = branch.paging(req.query);
+      const where = { ...companyOnly, ...branch.searchWhere(req.query) };
+
+      const [total, companies] = await prisma.$transaction([
+        prisma.company.count({ where }),
+        prisma.company.findMany({
+          where,
+          include: branch.accountInclude,
+          orderBy: { createdAt: "desc" },
+          skip: page.skip,
+          take: page.take,
+        }),
+      ]);
+
+      return response.success(
+        res,
+        branch.paginated(companies, total, page),
+        "Company List Fetched Successfully",
+      );
+    } catch (error) {
+      return branch.handleError(res, error, "Company");
+    }
+  }
+
+  async details(req, res) {
+    try {
+      const company = await prisma.company.findFirst({
+        where: { id: req.params.id, ...companyOnly },
+        include: branch.accountInclude,
+      });
+
+      if (!company) {
+        return response.notFoundError(res, "Company Not Found!");
+      }
+
+      return response.success(res, company, "Company Fetched Successfully");
+    } catch (error) {
+      return branch.handleError(res, error, "Company");
+    }
+  }
+
+  async create(req, res) {
+    try {
+      const invalid = branch.validateBody(req.body, { requirePassword: true });
+      if (invalid) {
+        return response.error(res, invalid, 422);
+      }
+
+      const company = await prisma.company.create({
+        data: {
+          ...branch.pickData(req.body),
+          users: {
+            create: {
+              ...(await branch.accountData(req.body.user)),
+              ...COMPANY_ACCOUNT,
+            },
+          },
+        },
+        include: branch.accountInclude,
+      });
+
+      return response.insertionSuccess(res, company, "Company Created Successfully");
+    } catch (error) {
+      return branch.handleError(res, error, "Company");
+    }
+  }
+
+  async update(req, res) {
+    try {
+      const invalid = branch.validateBody(req.body, { requirePassword: false });
+      if (invalid) {
+        return response.error(res, invalid, 422);
+      }
+
+      const company = await prisma.$transaction(async (tx) => {
+        await tx.company.update({
+          where: { id: req.params.id },
+          data: branch.pickData(req.body),
+        });
+
+        if (req.body.user) {
+          await branch.saveAccount(tx, req.params.id, req.body.user, COMPANY_ACCOUNT);
+        }
+
+        return tx.company.findUnique({
+          where: { id: req.params.id },
+          include: branch.accountInclude,
+        });
+      });
+
+      return response.updateSuccess(res, company, "Company Updated Successfully");
+    } catch (error) {
+      return branch.handleError(res, error, "Company");
+    }
+  }
+
+  async changeStatus(req, res) {
+    try {
+      const current = await prisma.company.findUnique({
+        where: { id: req.params.id },
+        select: { status: true },
+      });
+
+      if (!current) {
+        return response.notFoundError(res, "Company Not Found!");
+      }
+
+      const company = await prisma.company.update({
+        where: { id: req.params.id },
+        data: { status: current.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" },
+        include: branch.accountInclude,
+      });
+
+      return response.updateSuccess(res, company, `Company Marked ${company.status}`);
+    } catch (error) {
+      return branch.handleError(res, error, "Company");
+    }
+  }
+
+  async remove(req, res) {
+    try {
+      const protectedAccounts = await prisma.user.count({
+        where: { branchId: req.params.id, accountType: "DEVELOPER" },
+      });
+      if (protectedAccounts) {
+        return response.error(
+          res,
+          "This company holds a system admin account and cannot be deleted!",
+          403,
+        );
+      }
+
+      const outlets = await prisma.company.count({ where: { parentId: req.params.id } });
+      if (outlets) {
+        return response.error(res, "Remove the outlets under this company first!", 409);
+      }
+
+      const company = await prisma.$transaction(async (tx) => {
+        await tx.user.deleteMany({ where: { branchId: req.params.id } });
+        return tx.company.delete({ where: { id: req.params.id } });
+      });
+
+      return response.deletionSuccess(res, company, "Company Deleted Successfully");
+    } catch (error) {
+      return branch.handleError(res, error, "Company");
+    }
+  }
+}
+
+const company = new Company();
+module.exports = company;

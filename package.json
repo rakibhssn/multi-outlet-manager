@@ -1,0 +1,41 @@
+{
+  "name": "outlet-manager",
+  "version": "0.1.0",
+  "description": "",
+  "homepage": "https://github.com/rakibhssn/multi-outlet-manager#readme",
+  "bugs": {
+    "url": "https://github.com/rakibhssn/multi-outlet-manager/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rakibhssn/multi-outlet-manager.git"
+  },
+  "license": "ISC",
+  "author": "MD. Rakibul Hasan",
+  "type": "commonjs",
+  "main": "backend/server.js",
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "postinstall": "prisma generate",
+    "seed:auth": "node prisma/auth_seed.js",
+    "backend": "nodemon backend/server.js",
+    "frontend": "cd frontend && npm start",
+    "start": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:seed": "prisma db seed"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "concurrently": "^10.0.5",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "jsonwebtoken": "^9.0.3",
+    "nodemon": "^3.1.14",
+    "pg": "^8.23.0",
+    "prisma": "^7.10.0",
+    "tailwind-variants": "^3.3.1"
+  }
+}

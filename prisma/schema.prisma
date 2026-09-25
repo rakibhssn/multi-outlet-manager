@@ -1,0 +1,202 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum USER_ROLE {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  USER
+}
+
+enum STATUS {
+  ACTIVE
+  INACTIVE
+}
+
+enum ITEM_STATUS {
+  AVAILABLE
+  UNAVAILABLE
+  DISCONTINUED
+  SOLD_OUT
+}
+
+enum ACCOUNT_TYPE {
+  DEVELOPER
+  HEADQUARTER
+  OUTLET
+  OUTLET_STAFF
+}
+
+enum STAFF_STATUS {
+  GENERAL_MANAGER
+  ASSISTANT_MANAGER
+  SHIFT_MANAGER
+  CASHIER
+  SERVER
+  HOST
+  COOK
+  CHEF
+  KITCHEN_STAFF
+  BARISTA
+  DELIVERY_DRIVER
+  CLEANER
+}
+
+enum EMPLOYMENT_TYPE {
+  FULL_TIME
+  PART_TIME
+  TEMPORARY
+  SEASONAL
+  CONTRACTOR
+}
+
+enum SALARY_TYPE {
+  HOURLY
+  SALARY
+}
+
+model User {
+  id          String       @id @default(cuid())
+  branchId    String?
+  staffId     String?
+  email       String       @unique
+  password    String
+  hash        String
+  role        USER_ROLE    @default(USER)
+  status      STATUS       @default(ACTIVE)
+  accountType ACCOUNT_TYPE @default(HEADQUARTER)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  company     Company?     @relation(fields: [branchId], references: [id])
+  staff       Staff?       @relation(fields: [staffId], references: [id])
+}
+
+model Company {
+  id                 String    @id @default(cuid())
+  name               String?
+  contactPersonName  String
+  contactPersonEmail String    @unique
+  contactPersonPhone String    @unique
+  address            String
+  city               String
+  state              String
+  zipCode            String
+  country            String
+  companyLogo        String?
+  companyBanner      String?
+  parentId           String?
+  status             STATUS    @default(ACTIVE)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  parent             Company?  @relation("CompanyToCompany", fields: [parentId], references: [id])
+  children           Company[] @relation("CompanyToCompany")
+  users              User[]
+  staffs             Staff[]
+}
+
+model Staff {
+  id             String          @id @default(cuid())
+  branchId       String
+  badgeNumber    String          @unique
+  designation    STAFF_STATUS
+  employmentType EMPLOYMENT_TYPE
+  jobTitle       String
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String
+  gender         String
+  dob            String
+  profileImage   String?
+  address1       String
+  address2       String?
+  city           String
+  state          String
+  country        String
+  salaryType     SALARY_TYPE     @default(SALARY)
+  hireDate       DateTime        @default(now())
+  exitDate       DateTime?
+  qrData         String?
+  status         STATUS          @default(ACTIVE)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  outlet         Company         @relation(fields: [branchId], references: [id])
+  users          User[]
+}
+
+model Menu {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  menuImage   String?
+  status      STATUS     @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  menuItems   MenuItem[]
+}
+
+model MenuItem {
+  id             String          @id @default(cuid())
+  menuId         String
+  name           String
+  description    String?
+  menuItemImage  String?
+  status         ITEM_STATUS     @default(AVAILABLE)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  menu           Menu            @relation(fields: [menuId], references: [id])
+  menuItemPrices MenuItemPrice[]
+}
+
+model MenuItemPrice {
+  id         String   @id @default(cuid())
+  menuItemId String
+  basePrice  Decimal  @db.Decimal(10, 2)
+  price      Decimal  @default(0.0) @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+}
+
+model Role {
+  id                String            @id @default(cuid())
+  name              String
+  description       String?
+  status            STATUS            @default(ACTIVE)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  permissionBatches PermissionBatch[]
+}
+
+model Permission {
+  id              String            @id @default(cuid())
+  name            String
+  slug            String            @unique
+  description     String?
+  status          STATUS            @default(ACTIVE)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  batchPermission PermissionBatch[]
+}
+
+model PermissionBatch {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  status       STATUS     @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
+}
