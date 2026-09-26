@@ -3,6 +3,7 @@ import { useFormik } from "formik";
 import { useSetAtom } from "jotai";
 import {
   CustomDialog,
+  CustomImageField,
   CustomSwitch,
   CustomTextarea,
   InputField,
@@ -110,10 +111,9 @@ export default function MenuEntry({ open, menu, onClose, onSaved }) {
           showError={!!(formik.touched.description && formik.errors.description)}
           error={formik.errors.description}
         />
-        <InputField
-          label="Image URL"
-          type="url"
-          placeholder="https://..."
+        <CustomImageField
+          label="Image"
+          folder="menu"
           className="form-span-2"
           value={formik.values.menuImage}
           onChange={formik.handleChange("menuImage")}

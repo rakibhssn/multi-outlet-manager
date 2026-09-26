@@ -1,11 +1,13 @@
 import {
   LuBookOpen,
+  LuChartNoAxesCombined,
   LuLayoutDashboard,
-  LuList,
+  LuSettings,
   LuSoup,
   LuStore,
   LuUsers,
 } from "react-icons/lu";
+import { IoFastFoodSharp } from "react-icons/io5";
 import { HiBuildingStorefront } from "react-icons/hi2";
 import { BsPersonWorkspace } from "react-icons/bs";
 
@@ -23,10 +25,12 @@ export const HQ_MENUS = [
     title: "Menu",
     icon: LuBookOpen,
     children: [
-      { title: "Menus", link: "/hq/menu", icon: LuList },
+      { title: "Menus", link: "/hq/menu", icon: IoFastFoodSharp },
       { title: "Menu Items", link: "/hq/menu-item", icon: LuSoup },
     ],
   },
+  { title: "Reports", link: "/hq/report", icon: LuChartNoAxesCombined },
+  { title: "Settings", link: "/hq/settings", icon: LuSettings },
 ];
 
 export const OUTLET_MENUS = [

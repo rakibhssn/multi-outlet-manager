@@ -7,7 +7,10 @@ import OutletList from "@/Screens/HQ/Outlet/OutletList";
 import OutletDetails from "@/Screens/HQ/Outlet/OutletDetails";
 import StaffList from "@/Screens/HQ/Staff/StaffList";
 import MenuList from "@/Screens/HQ/Menu/MenuList";
+import MenuDetails from "@/Screens/HQ/Menu/MenuDetails";
 import MenuItemList from "@/Screens/HQ/MenuItem/MenuItemList";
+import Reports from "@/Screens/HQ/Report/Reports";
+import Settings from "@/Screens/HQ/Settings/Settings";
 import DeveloperRoute from "./DeveloperRoute";
 
 const HQRouter = (
@@ -22,7 +25,10 @@ const HQRouter = (
     <Route path="outlet/:id" element={<OutletDetails />} />
     <Route path="staff" element={<StaffList />} />
     <Route path="menu" element={<MenuList />} />
+    <Route path="menu/:id" element={<MenuDetails />} />
     <Route path="menu-item" element={<MenuItemList />} />
+    <Route path="report" element={<Reports />} />
+    <Route path="settings" element={<Settings />} />
   </Route>
 );
 

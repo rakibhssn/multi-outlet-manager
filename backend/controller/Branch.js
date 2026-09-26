@@ -22,6 +22,11 @@ const FIELD_LABELS = {
   Company_contactPersonPhone_key: "contact phone",
   User_email_key: "login email",
   Staff_badgeNumber_key: "badge number",
+  Company_parentId_name_key: "outlet name in this company",
+  MenuItem_menuId_name_key: "item name in this menu",
+  MenuItemOutlet_menuItemId_branchId_key: "item in this outlet",
+  PermissionBatch_roleId_permissionId_key: "permission in this role",
+  Role_name_key: "role name",
 };
 
 const branchAccounts = { accountType: { notIn: ["DEVELOPER", "OUTLET_STAFF"] } };
@@ -35,7 +40,12 @@ const accountInclude = {
     take: 1,
   },
   _count: {
-    select: { users: { where: branchAccounts }, children: true, staffs: true },
+    select: {
+      users: { where: branchAccounts },
+      children: true,
+      staffs: true,
+      menuItemOutlets: true,
+    },
   },
 };
 
@@ -89,31 +99,33 @@ async function saveAccount(tx, branchId, user, { role, accountType }) {
   return tx.user.create({ data: { ...data, role, accountType, branchId } });
 }
 
-function paging(query) {
+
+
+
+function toStock(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const stock = Number(value);
+  return Number.isInteger(stock) && stock >= 0 ? stock : undefined;
+}
+
+function listParams(query, { sortable = [], sortBy = "createdAt", orderBy = "desc" } = {}) {
   const page = Math.max(Number(query.page) || 1, 1);
-  const perPage = Math.min(Math.max(Number(query.perPage) || 10, 1), 100);
-  return { page, perPage, skip: (page - 1) * perPage, take: perPage };
+  const perPage = Math.min(Math.max(Number(query.per_page) || 10, 1), 100);
+  const field = sortable.includes(query.sort_by) ? query.sort_by : sortBy;
+  const order = ["asc", "desc"].includes(query.order_by) ? query.order_by : orderBy;
+
+  return {
+    skip: (page - 1) * perPage,
+    take: perPage,
+    orderBy: { [field]: order },
+    search: String(query.search_by ?? "").trim(),
+  };
 }
 
-function searchWhere(query) {
-  const search = String(query.search ?? "").trim();
+function searchWhere(search, fields = SEARCH_FIELDS) {
+  if (!search) return {};
   const contains = { contains: search, mode: "insensitive" };
-  return {
-    ...(query.status ? { status: query.status } : {}),
-    ...(search ? { OR: SEARCH_FIELDS.map((field) => ({ [field]: contains })) } : {}),
-  };
-}
-
-function paginated(items, total, { page, perPage }) {
-  return {
-    items,
-    pagination: {
-      page,
-      perPage,
-      total,
-      totalPages: Math.max(Math.ceil(total / perPage), 1),
-    },
-  };
+  return { OR: fields.map((field) => ({ [field]: contains })) };
 }
 
 function handleError(res, error, label = "Record") {
@@ -138,8 +150,8 @@ module.exports = {
   validateBody,
   accountData,
   saveAccount,
-  paging,
+  listParams,
+  toStock,
   searchWhere,
-  paginated,
   handleError,
 };

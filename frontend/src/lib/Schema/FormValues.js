@@ -50,6 +50,12 @@ export const StaffValues = {
   userConfirmPassword: "",
 };
 
+export const StaffTransferValues = {
+  branchId: "",
+  transferDate: "",
+  note: "",
+};
+
 export const MenuValues = {
   name: "",
   description: "",
@@ -65,4 +71,9 @@ export const MenuItemValues = {
   basePrice: "",
   price: "",
   status: "AVAILABLE",
+};
+
+export const OutletPriceValues = {
+  price: "",
+  stock: "0",
 };

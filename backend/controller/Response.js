@@ -7,6 +7,15 @@ class Response {
     });
   }
 
+  list(res, data, total, message = "Success", statusCode = 200) {
+    res.status(statusCode).json({
+      status: "success",
+      message,
+      data,
+      total,
+    });
+  }
+
   insertionSuccess(
     res,
     data,

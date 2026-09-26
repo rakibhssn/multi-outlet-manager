@@ -3,6 +3,7 @@ import { useFormik } from "formik";
 import { useSetAtom } from "jotai";
 import {
   CustomDialog,
+  CustomImageField,
   CustomSelectField,
   CustomTextarea,
   InputField,
@@ -28,7 +29,15 @@ function toFormValues(item, menuId) {
   };
 }
 
-export default function MenuItemEntry({ open, item, menuId, menuOptions = [], onClose, onSaved }) {
+export default function MenuItemEntry({
+  open,
+  item,
+  menuId,
+  menuOptions = [],
+  lockMenu = false,
+  onClose,
+  onSaved,
+}) {
   const setNotification = useSetAtom(notificationModal);
   const [loading, setLoading] = useState(false);
   const isEdit = !!item?.id;
@@ -99,6 +108,7 @@ export default function MenuItemEntry({ open, item, menuId, menuOptions = [], on
           label="Menu"
           placeholder="Select menu"
           options={menuOptions}
+          disabled={lockMenu}
           required
           className="form-span-2"
           value={formik.values.menuId}
@@ -130,10 +140,9 @@ export default function MenuItemEntry({ open, item, menuId, menuOptions = [], on
           showError={!!(formik.touched.description && formik.errors.description)}
           error={formik.errors.description}
         />
-        <InputField
-          label="Image URL"
-          type="url"
-          placeholder="https://..."
+        <CustomImageField
+          label="Image"
+          folder="menu-item"
           className="form-span-2"
           value={formik.values.menuItemImage}
           onChange={formik.handleChange("menuItemImage")}

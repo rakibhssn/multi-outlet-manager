@@ -9,6 +9,7 @@ import CustomSwitch from "./CustomSwitch";
 import CustomTextarea from "./CustomTextarea";
 import CustomTimepicker from "./CustomTimepicker";
 import CustomUpload from "./CustomUpload";
+import CustomImageField from "./CustomImageField";
 import InputField from "./InputField";
 
 const INPUT_TYPES = ["text", "email", "password", "number", "tel", "url", "search"];
@@ -24,6 +25,7 @@ const FIELD_COMPONENTS = {
   radio: CustomRadioField,
   switch: CustomSwitch,
   upload: CustomUpload,
+  image: CustomImageField,
 };
 
 export default function DynamicField({ type = "text", ...props }) {

@@ -10,6 +10,7 @@ export { default as CustomCheckboxGroup } from "./CustomCheckboxGroup";
 export { default as CustomRadioField } from "./CustomRadioField";
 export { default as CustomSwitch } from "./CustomSwitch";
 export { default as CustomUpload } from "./CustomUpload";
+export { default as CustomImageField } from "./CustomImageField";
 export { default as AnimateButton } from "./AnimateButton";
 export { default as CustomDialog } from "./CustomDialog";
 export { default as CustomDropDown } from "./CustomDropDown";

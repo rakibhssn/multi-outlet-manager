@@ -141,7 +141,8 @@ export default function StaffEntry({
           options={outletOptions}
           required
           className="form-span-2"
-          disabled={lockOutlet}
+          disabled={lockOutlet || isEdit}
+          hint={isEdit && !lockOutlet ? "Use Transfer from the staff list to move to another outlet" : undefined}
           value={formik.values.branchId}
           onValueChange={formik.handleChange("branchId")}
           onBlur={formik.handleBlur("branchId")}

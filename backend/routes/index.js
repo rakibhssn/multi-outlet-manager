@@ -12,5 +12,6 @@ router.use("/outlet", require("./outlet"));
 router.use("/staff", require("./staff"));
 router.use("/menu", require("./menu"));
 router.use("/menu-item", require("./menu-item"));
+router.use("/upload", require("./upload"));
 
 module.exports = router;

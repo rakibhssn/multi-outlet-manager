@@ -1,64 +1,55 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useSetAtom } from "jotai";
-import {
-  ActionComp,
-  CustomSelectField,
-  CustomTable,
-  StatusComp,
-} from "@/components/custom";
+import { useAtom } from "jotai";
+import { ActionComp, CustomTable, StatusComp } from "@/components/custom";
 import { PageHeader } from "@/Screens/Layout/DashboardBlocks";
+import useScope from "@/hooks/useScope";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
+import { OutletColumn } from "@/lib/TableData/Columns";
 import { confirmModal, emptyNotifyData, notificationModal } from "@/lib/Variables";
-import useScope from "@/hooks/useScope";
 import OutletEntry from "./OutletEntry";
 
+const DEFAULT_PARAMS = {
+  page: 1,
+  per_page: 10,
+  sort_by: "createdAt",
+  order_by: "desc",
+};
+
+const SEARCH_DEBOUNCE = 400;
+
 export default function OutletList({ companyId: fixedCompanyId, onChange }) {
-  const setNotification = useSetAtom(notificationModal);
-  const setConfirmation = useSetAtom(confirmModal);
   const navigate = useNavigate();
-  const [outlets, setOutlets] = useState([]);
-  const [companyOptions, setCompanyOptions] = useState([]);
   const scope = useScope();
   const lockedCompanyId = fixedCompanyId ?? scope.companyId ?? "";
   const companyLocked = !!lockedCompanyId;
-  const [companyId, setCompanyId] = useState(lockedCompanyId);
   const embedded = !!fixedCompanyId;
-  const [pagination, setPagination] = useState({ page: 1, perPage: 10, total: 0 });
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [, setConfirmation] = useAtom(confirmModal);
+  const [, setNotification] = useAtom(notificationModal);
+  const [params, setParams] = useState({
+    ...DEFAULT_PARAMS,
+    companyId: lockedCompanyId || undefined,
+  });
+  const [data, setData] = useState({ data: [], total: 0 });
+  const [companyOptions, setCompanyOptions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [entry, setEntry] = useState({ open: false, outlet: null });
-
-  const { page, perPage } = pagination;
+  const [openModal, setOpenModal] = useState(false);
+  const [outlet, setOutlet] = useState(null);
 
   const fetchOutlets = useCallback(() => {
     setLoading(true);
 
-    ApiService.get(API_LINK.Outlet, {
-      params: {
-        page,
-        perPage,
-        search: debouncedSearch || undefined,
-        companyId: companyId || undefined,
-      },
-    })
+    ApiService.get(API_LINK.Outlet, { params })
       .then((res) => {
         if (res.status === "success") {
-          const items = res?.data?.items ?? [];
-          const total = res?.data?.pagination?.total ?? 0;
-          setOutlets(items);
-          setPagination((prev) =>
-            !items.length && prev.page > 1
-              ? { ...prev, total, page: prev.page - 1 }
-              : { ...prev, total },
-          );
+          setData({ data: res?.data ?? [], total: res?.total ?? 0 });
         } else {
           setNotification({
             open: true,
             title: "Error",
             description: res.message,
+            type: "error",
           });
         }
       })
@@ -67,12 +58,13 @@ export default function OutletList({ companyId: fixedCompanyId, onChange }) {
           open: true,
           title: "Error",
           description: error?.response?.data?.message ?? "Failed to load outlets",
+          type: "error",
         });
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [page, perPage, debouncedSearch, companyId, setNotification]);
+  }, [params, setNotification]);
 
   useEffect(() => {
     fetchOutlets();
@@ -84,20 +76,16 @@ export default function OutletList({ companyId: fixedCompanyId, onChange }) {
       return;
     }
 
-    ApiService.get(API_LINK.Company, { params: { perPage: 100 } })
+    ApiService.get(API_LINK.Company, { params: { per_page: 100, sort_by: "name", order_by: "asc" } })
       .then((res) => {
         if (res.status === "success") {
-          setCompanyOptions(
-            (res?.data?.items ?? []).map((item) => ({
-              label: item.name,
-              value: item.id,
-            })),
-          );
+          setCompanyOptions((res?.data ?? []).map((item) => ({ label: item.name, value: item.id })));
         } else {
           setNotification({
             open: true,
             title: "Error",
             description: res.message,
+            type: "error",
           });
         }
       })
@@ -106,221 +94,217 @@ export default function OutletList({ companyId: fixedCompanyId, onChange }) {
           open: true,
           title: "Error",
           description: error?.response?.data?.message ?? "Failed to load companies",
+          type: "error",
         });
       });
   }, [scope.companyId, scope.companyName, setNotification]);
 
-  useEffect(() => {
-    const next = search.trim();
-    if (next === debouncedSearch) return undefined;
-    const timer = setTimeout(() => {
-      setDebouncedSearch(next);
-      setPagination((prev) => ({ ...prev, page: 1 }));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [search, debouncedSearch]);
-
-  function toggleStatus(outlet) {
-    ApiService.patch(API_LINK.OutletStatus(outlet.id))
-      .then((res) => {
-        if (res.status === "success") {
+  const handleStatusChange = useCallback(
+    (item) => {
+      ApiService.patch(API_LINK.OutletStatus(item.id))
+        .then((res) => {
           setNotification({
             open: true,
-            title: "Success",
+            title: res.status === "success" ? "Success" : "Error",
             description: res?.message,
+            type: res.status === "success" ? "success" : "error",
           });
-          fetchOutlets();
-          onChange?.();
-        } else {
+          if (res.status === "success") {
+            fetchOutlets();
+            onChange?.();
+          }
+        })
+        .catch((error) => {
           setNotification({
             open: true,
             title: "Error",
-            description: res.message,
+            description: error?.response?.data?.message ?? "Failed to change status",
+            type: "error",
           });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to change status",
         });
-      });
-  }
+    },
+    [fetchOutlets, onChange, setNotification],
+  );
 
-  function confirmDelete(outlet) {
-    setConfirmation({
-      open: true,
-      title: "Delete Outlet",
-      description: `"${outlet.name}" and its login account will be removed permanently.`,
-      footer: true,
-      remove: true,
-      submitLabel: "Delete",
-      submitClick: () =>
-        ApiService.delete(API_LINK.OutletDetails(outlet.id))
-          .then((res) => {
-            if (res.status === "success") {
-              setNotification({
-                open: true,
-                title: "Success",
-                description: res?.message,
-              });
-              fetchOutlets();
-              onChange?.();
-            } else {
-              setNotification({
-                open: true,
-                title: "Error",
-                description: res.message,
-              });
-            }
-          })
-          .catch((error) => {
-            setNotification({
-              open: true,
-              title: "Error",
-              description: error?.response?.data?.message ?? "Failed to delete outlet",
-            });
-          })
-          .finally(() => {
+  const removeOutlet = useCallback(
+    (item) => {
+      ApiService.delete(API_LINK.OutletDetails(item.id))
+        .then((res) => {
+          setNotification({
+            open: true,
+            title: res.status === "success" ? "Success" : "Error",
+            description: res?.message,
+            type: res.status === "success" ? "success" : "error",
+          });
+          if (res.status === "success") {
+            fetchOutlets();
+            onChange?.();
             setConfirmation(emptyNotifyData);
-          }),
-    });
-  }
+          }
+        })
+        .catch((error) => {
+          setNotification({
+            open: true,
+            title: "Error",
+            description: error?.response?.data?.message ?? "Failed to delete outlet",
+            type: "error",
+          });
+        });
+    },
+    [fetchOutlets, onChange, setConfirmation, setNotification],
+  );
 
-  const columns = [
-    {
-      key: "name",
-      title: "Outlet",
-      dataIndex: "name",
-      render: (name, record) => (
+  const handleDelete = useCallback(
+    (item) => {
+      const confirmationPayload = {
+        open: true,
+        title: "Remove Outlet",
+        description: "",
+        body: `Are you sure to remove "${item.name}" and its login account?`,
+        type: "success",
+        footer: true,
+        cancelButton: true,
+        remove: true,
+        submitLabel: "Delete",
+        submitClick: () => removeOutlet(item),
+      };
+
+      setConfirmation(confirmationPayload);
+    },
+    [removeOutlet, setConfirmation],
+  );
+
+  const outlets = useMemo(() => {
+    if (!data.data || data.data.length === 0) return [];
+
+    const offset = (params.page - 1) * params.per_page;
+
+    return data.data.map((item, index) => ({
+      key: item.id,
+      id: 1 + index + offset,
+      name: (
         <div className="cell-stack">
-          <span className="cell-title">{name}</span>
-          {!companyLocked && <span className="cell-sub">{record.parent?.name}</span>}
+          <span className="cell-title">{item.name}</span>
+          {!companyLocked && <span className="cell-sub">{item.parent?.name}</span>}
         </div>
       ),
-    },
-    {
-      key: "contact",
-      title: "Contact Person",
-      dataIndex: "contactPersonName",
-      render: (name, record) => (
+      contact: (
         <div className="cell-stack">
-          <span className="cell-title">{name}</span>
-          <span className="cell-sub">{record.contactPersonEmail}</span>
-          <span className="cell-sub">{record.contactPersonPhone}</span>
+          <span className="cell-title">{item.contactPersonName}</span>
+          <span className="cell-sub">{item.contactPersonEmail}</span>
+          <span className="cell-sub">{item.contactPersonPhone}</span>
         </div>
       ),
-    },
-    {
-      key: "account",
-      title: "Login Account",
-      dataIndex: "users.0.email",
-      render: (email) => <span className="cell-title">{email ?? "No account"}</span>,
-    },
-    {
-      key: "city",
-      title: "Location",
-      dataIndex: "city",
-      render: (city, record) => (
+      account: <span className="cell-title">{item.users?.[0]?.email ?? "No account"}</span>,
+      location: (
         <div className="cell-stack">
-          <span className="cell-title">{city}</span>
-          <span className="cell-sub">
-            {[record.state, record.country].filter(Boolean).join(", ")}
-          </span>
+          <span className="cell-title">{item.city}</span>
+          <span className="cell-sub">{[item.state, item.country].filter(Boolean).join(", ")}</span>
         </div>
       ),
-    },
-    {
-      key: "staffs",
-      title: "Staff",
-      dataIndex: "_count.staffs",
-      align: "center",
-    },
-    {
-      key: "status",
-      title: "Status",
-      dataIndex: "status",
-      render: (status, record) => (
-        <StatusComp type={status} onClick={() => toggleStatus(record)} />
-      ),
-    },
-    {
-      key: "actions",
-      title: "Actions",
-      align: "right",
-      render: (_, record) => (
+      staffs: item._count?.staffs ?? 0,
+      status: <StatusComp type={item.status} onClick={() => handleStatusChange(item)} />,
+      action: (
         <ActionComp
           className="justify-end"
-          view
-          viewTitle="View outlet"
-          viewAction={() => navigate(`/hq/outlet/${record.id}`)}
-          edit
-          editTitle="Edit outlet"
-          editAction={() => setEntry({ open: true, outlet: record })}
-          remove
-          deleteTitle="Delete outlet"
-          deleteAction={() => confirmDelete(record)}
+          view={true}
+          viewTitle="View"
+          viewAction={() => navigate(`/hq/outlet/${item.id}`)}
+          edit={true}
+          editTitle="Edit"
+          editAction={() => {
+            setOutlet(item);
+            setOpenModal(true);
+          }}
+          remove={true}
+          deleteTitle="Delete"
+          deleteAction={() => handleDelete(item)}
         />
       ),
+    }));
+  }, [data, params.page, params.per_page, companyLocked, navigate, handleStatusChange, handleDelete]);
+
+  const handleChanges = useCallback(
+    ({ page, pageSize, sortField, sort, filter }) => {
+      setParams((prev) => ({
+        ...prev,
+        page,
+        per_page: pageSize,
+        sort_by: sortField ?? DEFAULT_PARAMS.sort_by,
+        order_by: sort?.direction ?? DEFAULT_PARAMS.order_by,
+        companyId: lockedCompanyId || filter || undefined,
+      }));
     },
-  ];
+    [lockedCompanyId],
+  );
+
+  const handleSearch = useCallback((value) => {
+    const search = value.trim();
+    setParams((prev) => ({
+      ...prev,
+      page: 1,
+      search_by: search || undefined,
+    }));
+  }, []);
+
+  const searchTimer = useRef(null);
+
+  const debouncedSearch = useCallback(
+    (value) => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = setTimeout(() => handleSearch(value), SEARCH_DEBOUNCE);
+    },
+    [handleSearch],
+  );
+
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
+
+  function handleAddOutlet() {
+    setOutlet(null);
+    setOpenModal(true);
+  }
 
   return (
     <div className={embedded ? "page-section" : "page"}>
       {!embedded && (
-        <PageHeader
-          title="Outlets"
-          subtitle="Outlets under each company and their login accounts"
-        />
+        <PageHeader title="Outlets" subtitle="Outlets under each company and their login accounts" />
       )}
 
       <CustomTable
-        columns={columns}
-        dataSource={outlets}
-        loading={loading}
-        searchPlaceholder="Search name, contact or location..."
-        searchValue={search}
-        onSearchChange={setSearch}
         title={embedded ? "Outlets" : undefined}
         description={embedded ? "Outlets under this company" : undefined}
-        actions={
-          !companyLocked && (
-          <CustomSelectField
-            name="companyFilter"
-            placeholder="All companies"
-            options={[{ label: "All companies", value: "all" }, ...companyOptions]}
-            value={companyId || "all"}
-            onValueChange={(value) => {
-              setCompanyId(value === "all" ? "" : value);
-              setPagination((prev) => ({ ...prev, page: 1 }));
-            }}
-            className="table-filter"
-          />
-          )
-        }
-        total={pagination.total}
-        page={page}
-        pageSize={perPage}
-        onPageChange={(next) => setPagination((prev) => ({ ...prev, page: next }))}
-        onPageSizeChange={(size) =>
-          setPagination((prev) => ({ ...prev, perPage: size, page: 1 }))
-        }
-        emptyMessage="No outlets yet"
-        onReload={fetchOutlets}
-        onAdd={() => setEntry({ open: true, outlet: null })}
+        columns={OutletColumn}
+        dataSource={outlets}
+        rowKey="key"
+        loading={loading}
+        total={data.total}
+        pageSize={params.per_page}
+        onChange={handleChanges}
+        onSearch={debouncedSearch}
+        filterOptions={companyLocked ? undefined : companyOptions}
+        filterPlaceholder="All companies"
         addLabel="Add Outlet"
+        onAdd={handleAddOutlet}
+        reloadAction={fetchOutlets}
+        showReload={true}
+        searchPlaceholder="Search name, contact or location..."
+        emptyText="No outlet has been created yet"
       />
 
       <OutletEntry
-        open={entry.open}
-        outlet={entry.outlet}
-        companyId={companyId}
+        open={openModal}
+        outlet={outlet}
+        companyId={params.companyId}
         companyOptions={companyOptions}
         lockCompany={companyLocked}
-        onClose={() => setEntry({ open: false, outlet: null })}
+        onClose={() => setOpenModal(false)}
         onSaved={() => {
-          setEntry({ open: false, outlet: null });
+          setOpenModal(false);
           fetchOutlets();
           onChange?.();
         }}

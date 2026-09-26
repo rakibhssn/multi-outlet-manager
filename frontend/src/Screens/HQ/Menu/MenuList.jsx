@@ -1,47 +1,46 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 import { ActionComp, CustomTable, StatusComp } from "@/components/custom";
 import { PageHeader } from "@/Screens/Layout/DashboardBlocks";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
+import { MenuColumn } from "@/lib/TableData/Columns";
 import { confirmModal, emptyNotifyData, notificationModal } from "@/lib/Variables";
 import MenuEntry from "./MenuEntry";
 
-export default function MenuList() {
-  const setNotification = useSetAtom(notificationModal);
-  const setConfirmation = useSetAtom(confirmModal);
-  const navigate = useNavigate();
-  const [menus, setMenus] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, perPage: 10, total: 0 });
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [entry, setEntry] = useState({ open: false, menu: null });
+const DEFAULT_PARAMS = {
+  page: 1,
+  per_page: 10,
+  sort_by: "createdAt",
+  order_by: "desc",
+};
 
-  const { page, perPage } = pagination;
+const SEARCH_DEBOUNCE = 400;
+
+export default function MenuList() {
+  const navigate = useNavigate();
+  const [, setConfirmation] = useAtom(confirmModal);
+  const [, setNotification] = useAtom(notificationModal);
+  const [params, setParams] = useState(DEFAULT_PARAMS);
+  const [data, setData] = useState({ data: [], total: 0 });
+  const [loading, setLoading] = useState(false);
+  const [menuData, setMenuData] = useState(undefined);
+  const [openModal, setOpenModal] = useState(false);
 
   const fetchMenus = useCallback(() => {
     setLoading(true);
 
-    ApiService.get(API_LINK.Menu, {
-      params: { page, perPage, search: debouncedSearch || undefined },
-    })
+    ApiService.get(API_LINK.Menu, { params })
       .then((res) => {
         if (res.status === "success") {
-          const items = res?.data?.items ?? [];
-          const total = res?.data?.pagination?.total ?? 0;
-          setMenus(items);
-          setPagination((prev) =>
-            !items.length && prev.page > 1
-              ? { ...prev, total, page: prev.page - 1 }
-              : { ...prev, total },
-          );
+          setData({ data: res?.data ?? [], total: res?.total ?? 0 });
         } else {
           setNotification({
             open: true,
             title: "Error",
             description: res.message,
+            type: "error",
           });
         }
       })
@@ -50,177 +49,193 @@ export default function MenuList() {
           open: true,
           title: "Error",
           description: error?.response?.data?.message ?? "Failed to load menus",
+          type: "error",
         });
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [page, perPage, debouncedSearch, setNotification]);
+  }, [params, setNotification]);
 
   useEffect(() => {
     fetchMenus();
   }, [fetchMenus]);
 
-  useEffect(() => {
-    const next = search.trim();
-    if (next === debouncedSearch) return undefined;
-    const timer = setTimeout(() => {
-      setDebouncedSearch(next);
-      setPagination((prev) => ({ ...prev, page: 1 }));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [search, debouncedSearch]);
 
-  function toggleStatus(menu) {
+  const toggleStatus = useCallback((menu) => {
     ApiService.patch(API_LINK.MenuStatus(menu.id))
       .then((res) => {
-        if (res.status === "success") {
-          setNotification({
-            open: true,
-            title: "Success",
-            description: res?.message,
-          });
-          fetchMenus();
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
+        setNotification({
+          open: true,
+          title: res.status === "success" ? "Success" : "Error",
+          description: res?.message,
+          type: res.status === "success" ? "success" : "error",
+        });
+        if (res.status === "success") fetchMenus();
       })
       .catch((error) => {
         setNotification({
           open: true,
           title: "Error",
           description: error?.response?.data?.message ?? "Failed to change status",
+          type: "error",
         });
       });
-  }
+  }, [fetchMenus, setNotification]);
 
-  function confirmDelete(menu) {
-    setConfirmation({
+  const removeMenu = useCallback((menu) => {
+    ApiService.delete(API_LINK.MenuDetails(menu.id))
+      .then((res) => {
+        setNotification({
+          open: true,
+          title: res.status === "success" ? "Success" : "Error",
+          description: res?.message,
+          type: res.status === "success" ? "success" : "error",
+        });
+        if (res.status === "success") {
+          fetchMenus();
+          setConfirmation(emptyNotifyData);
+        }
+      })
+      .catch((error) => {
+        setNotification({
+          open: true,
+          title: "Error",
+          description: error?.response?.data?.message ?? "Failed to delete menu",
+          type: "error",
+        });
+      });
+  }, [fetchMenus, setConfirmation, setNotification]);
+
+  const handleDelete = useCallback((menu) => {
+    const confirmationPayload = {
       open: true,
-      title: "Delete Menu",
-      description: `"${menu.name}" will be removed permanently.`,
+      title: "Remove Menu",
+      description: "",
+      body: `Are you sure to remove "${menu.name}"?`,
+      type: "success",
       footer: true,
+      cancelButton: true,
       remove: true,
       submitLabel: "Delete",
-      submitClick: () =>
-        ApiService.delete(API_LINK.MenuDetails(menu.id))
-          .then((res) => {
-            if (res.status === "success") {
-              setNotification({
-                open: true,
-                title: "Success",
-                description: res?.message,
-              });
-              fetchMenus();
-            } else {
-              setNotification({
-                open: true,
-                title: "Error",
-                description: res.message,
-              });
-            }
-          })
-          .catch((error) => {
-            setNotification({
-              open: true,
-              title: "Error",
-              description: error?.response?.data?.message ?? "Failed to delete menu",
-            });
-          })
-          .finally(() => {
-            setConfirmation(emptyNotifyData);
-          }),
-    });
-  }
+      submitClick: () => removeMenu(menu),
+    };
 
-  const columns = [
-    {
-      key: "name",
-      title: "Menu",
-      dataIndex: "name",
-      render: (name, record) => (
+    setConfirmation(confirmationPayload);
+  }, [removeMenu, setConfirmation]);
+
+  const menus = useMemo(() => {
+    if (!data.data || data.data.length === 0) return [];
+
+    const offset = (params.page - 1) * params.per_page;
+
+    return data.data.map((menu, index) => ({
+      key: menu.id,
+      id: 1 + index + offset,
+      name: (
         <div className="menu-cell">
-          {record.menuImage ? (
-            <img src={record.menuImage} alt={name} className="menu-thumb" />
+          {menu.menuImage ? (
+            <img src={menu.menuImage} alt={menu.name} className="menu-thumb" />
           ) : (
-            <span className="menu-thumb menu-thumb-empty">{name?.charAt(0)}</span>
+            <span className="menu-thumb menu-thumb-empty">{menu.name?.charAt(0)}</span>
           )}
           <div className="cell-stack">
-            <span className="cell-title">{name}</span>
-            {record.description && <span className="cell-sub">{record.description}</span>}
+            <span className="cell-title">{menu.name}</span>
+            {menu.description && <span className="cell-sub">{menu.description}</span>}
           </div>
         </div>
       ),
-    },
-    {
-      key: "items",
-      title: "Items",
-      dataIndex: "_count.menuItems",
-      align: "center",
-    },
-    {
-      key: "status",
-      title: "Status",
-      dataIndex: "status",
-      render: (status, record) => (
-        <StatusComp type={status} onClick={() => toggleStatus(record)} />
-      ),
-    },
-    {
-      key: "actions",
-      title: "Actions",
-      align: "right",
-      render: (_, record) => (
+      items: menu._count?.menuItems ?? 0,
+      outlets: menu.outletCount ?? 0,
+      status: <StatusComp type={menu.status} onClick={() => toggleStatus(menu)} />,
+      action: (
         <ActionComp
           className="justify-end"
-          view
-          viewTitle="View items"
-          viewAction={() => navigate(`/hq/menu-item?menuId=${record.id}`)}
-          edit
-          editTitle="Edit menu"
-          editAction={() => setEntry({ open: true, menu: record })}
-          remove
-          deleteTitle="Delete menu"
-          deleteAction={() => confirmDelete(record)}
+          view={true}
+          viewTitle="View"
+          viewAction={() => navigate(`/hq/menu/${menu.id}`)}
+          edit={true}
+          editTitle="Edit"
+          editAction={() => {
+            setMenuData(menu);
+            setOpenModal(true);
+          }}
+          remove={true}
+          deleteTitle="Delete"
+          deleteAction={() => handleDelete(menu)}
         />
       ),
+    }));
+  }, [data, params.page, params.per_page, navigate, toggleStatus, handleDelete]);
+
+  const handleChanges = useCallback(({ page, pageSize, sortField, sort }) => {
+    setParams((prev) => ({
+      ...prev,
+      page,
+      per_page: pageSize,
+      sort_by: sortField ?? DEFAULT_PARAMS.sort_by,
+      order_by: sort?.direction ?? DEFAULT_PARAMS.order_by,
+    }));
+  }, []);
+
+  const handleSearch = useCallback((value) => {
+    const search = value.trim();
+    setParams((prev) => ({
+      ...prev,
+      page: 1,
+      search_by: search || undefined,
+    }));
+  }, []);
+
+  const searchTimer = useRef(null);
+
+  const debouncedSearch = useCallback(
+    (value) => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = setTimeout(() => handleSearch(value), SEARCH_DEBOUNCE);
     },
-  ];
+    [handleSearch],
+  );
+
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
+
+  function handleAddAction() {
+    setMenuData(undefined);
+    setOpenModal(true);
+  }
 
   return (
     <div className="page">
-      <PageHeader title="Menus" subtitle="Group your items into menus like Breakfast or Drinks" />
+      <PageHeader title="Menus" subtitle="Group your items into menus and assign them to outlets" />
 
       <CustomTable
-        columns={columns}
+        columns={MenuColumn}
         dataSource={menus}
+        rowKey="key"
         loading={loading}
-        searchPlaceholder="Search menus..."
-        searchValue={search}
-        onSearchChange={setSearch}
-        total={pagination.total}
-        page={page}
-        pageSize={perPage}
-        onPageChange={(next) => setPagination((prev) => ({ ...prev, page: next }))}
-        onPageSizeChange={(size) =>
-          setPagination((prev) => ({ ...prev, perPage: size, page: 1 }))
-        }
-        emptyMessage="No menus yet"
-        onReload={fetchMenus}
-        onAdd={() => setEntry({ open: true, menu: null })}
+        total={data.total}
+        pageSize={params.per_page}
+        onChange={handleChanges}
+        onSearch={debouncedSearch}
         addLabel="Add Menu"
+        onAdd={handleAddAction}
+        reloadAction={fetchMenus}
+        showReload={true}
+        searchPlaceholder="Search menus..."
+        emptyText="No menu has been created yet"
       />
 
       <MenuEntry
-        open={entry.open}
-        menu={entry.menu}
-        onClose={() => setEntry({ open: false, menu: null })}
+        open={openModal}
+        menu={menuData}
+        onClose={() => setOpenModal(false)}
         onSaved={() => {
-          setEntry({ open: false, menu: null });
+          setOpenModal(false);
           fetchMenus();
         }}
       />

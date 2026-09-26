@@ -8,7 +8,9 @@ const ApiService = axios.create({
 ApiService.interceptors.request.use(
   (config) => {
     const token = (config.headers.Accept = "application/json");
-    config.headers["Content-Type"] = "application/json";
+    if (!(config.data instanceof FormData)) {
+      config.headers["Content-Type"] = "application/json";
+    }
     config.headers["Authorization"] = `Bearer ${AUTH_SECRET}`;
     return config;
   },

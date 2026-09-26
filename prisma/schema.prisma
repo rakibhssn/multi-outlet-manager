@@ -83,11 +83,11 @@ model User {
 }
 
 model Company {
-  id                 String    @id @default(cuid())
+  id                 String            @id @default(cuid())
   name               String?
   contactPersonName  String
-  contactPersonEmail String    @unique
-  contactPersonPhone String    @unique
+  contactPersonEmail String            @unique
+  contactPersonPhone String            @unique
   address            String
   city               String
   state              String
@@ -96,19 +96,23 @@ model Company {
   companyLogo        String?
   companyBanner      String?
   parentId           String?
-  status             STATUS    @default(ACTIVE)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  parent             Company?  @relation("CompanyToCompany", fields: [parentId], references: [id])
-  children           Company[] @relation("CompanyToCompany")
+  status             STATUS            @default(ACTIVE)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  parent             Company?          @relation("CompanyToCompany", fields: [parentId], references: [id])
+  children           Company[]         @relation("CompanyToCompany")
   users              User[]
   staffs             Staff[]
+  staffAssignments   StaffAssignment[]
+  menuItemOutlets    MenuItemOutlet[]
+
+  @@unique([parentId, name])
 }
 
 model Staff {
-  id             String          @id @default(cuid())
+  id             String            @id @default(cuid())
   branchId       String
-  badgeNumber    String          @unique
+  badgeNumber    String            @unique
   designation    STAFF_STATUS
   employmentType EMPLOYMENT_TYPE
   jobTitle       String
@@ -124,15 +128,31 @@ model Staff {
   city           String
   state          String
   country        String
-  salaryType     SALARY_TYPE     @default(SALARY)
-  hireDate       DateTime        @default(now())
+  salaryType     SALARY_TYPE       @default(SALARY)
+  hireDate       DateTime          @default(now())
   exitDate       DateTime?
   qrData         String?
-  status         STATUS          @default(ACTIVE)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  outlet         Company         @relation(fields: [branchId], references: [id])
+  status         STATUS            @default(ACTIVE)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  outlet         Company           @relation(fields: [branchId], references: [id])
   users          User[]
+  assignments    StaffAssignment[]
+}
+
+model StaffAssignment {
+  id        String    @id @default(cuid())
+  staffId   String
+  branchId  String
+  startDate DateTime
+  endDate   DateTime?
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  staff     Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  outlet    Company   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([staffId, branchId])
 }
 
 model Menu {
@@ -147,16 +167,34 @@ model Menu {
 }
 
 model MenuItem {
-  id             String          @id @default(cuid())
+  id             String           @id @default(cuid())
   menuId         String
   name           String
   description    String?
   menuItemImage  String?
-  status         ITEM_STATUS     @default(AVAILABLE)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  menu           Menu            @relation(fields: [menuId], references: [id])
+  status         STATUS           @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  menu           Menu             @relation(fields: [menuId], references: [id])
   menuItemPrices MenuItemPrice[]
+  itemOutlets    MenuItemOutlet[]
+
+  @@unique([menuId, name])
+}
+
+model MenuItemOutlet {
+  id         String      @id @default(cuid())
+  menuItemId String
+  branchId   String
+  price      Decimal?    @db.Decimal(10, 2)
+  stock      Int         @default(0)
+  status     ITEM_STATUS @default(AVAILABLE)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  menuItem   MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  outlet     Company     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, branchId])
 }
 
 model MenuItemPrice {
@@ -164,6 +202,7 @@ model MenuItemPrice {
   menuItemId String
   basePrice  Decimal  @db.Decimal(10, 2)
   price      Decimal  @default(0.0) @db.Decimal(10, 2)
+  status     STATUS   @default(ACTIVE)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
@@ -171,7 +210,7 @@ model MenuItemPrice {
 
 model Role {
   id                String            @id @default(cuid())
-  name              String
+  name              String            @unique
   description       String?
   status            STATUS            @default(ACTIVE)
   createdAt         DateTime          @default(now())
@@ -199,4 +238,6 @@ model PermissionBatch {
   updatedAt    DateTime   @updatedAt
   permission   Permission @relation(fields: [permissionId], references: [id])
   role         Role       @relation(fields: [roleId], references: [id])
+
+  @@unique([roleId, permissionId])
 }

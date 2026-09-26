@@ -7,6 +7,7 @@ router.get("/:id", outlet.details);
 router.post("/", outlet.create);
 router.put("/:id", outlet.update);
 router.patch("/:id/status", outlet.changeStatus);
+router.post("/:id/items", outlet.assignItems);
 router.delete("/:id", outlet.remove);
 
 module.exports = router;

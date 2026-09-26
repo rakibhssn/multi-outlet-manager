@@ -115,10 +115,27 @@ export const StaffUpdateValidation = yup.object({
   }),
 });
 
+export const StaffTransferValidation = yup.object({
+  branchId: yup.string().required("Select the outlet to transfer to"),
+  transferDate: yup.string().required("Transfer date is required"),
+  note: yup.string().trim().max(255, "Note must be at most 255 characters"),
+});
+
+const isHttpUrl = (value) => {
+  if (!value) return true;
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+};
+
+const imageUrl = yup.string().trim().test("image-url", "Enter a valid image URL", isHttpUrl);
+
 export const MenuValidation = yup.object({
   name: yup.string().trim().required("Menu name is required"),
   description: yup.string().trim(),
-  menuImage: yup.string().trim().url("Enter a valid image URL"),
+  menuImage: imageUrl,
   status: yup.string().oneOf(["ACTIVE", "INACTIVE"]).required(),
 });
 
@@ -126,7 +143,7 @@ export const MenuItemValidation = yup.object({
   menuId: yup.string().required("Menu is required"),
   name: yup.string().trim().required("Item name is required"),
   description: yup.string().trim(),
-  menuItemImage: yup.string().trim().url("Enter a valid image URL"),
+  menuItemImage: imageUrl,
   basePrice: yup
     .number()
     .typeError("Base price must be a number")
@@ -142,3 +159,25 @@ export const MenuItemValidation = yup.object({
     .oneOf(["AVAILABLE", "UNAVAILABLE", "SOLD_OUT", "DISCONTINUED"])
     .required("Status is required"),
 });
+
+const optionalPrice = yup
+  .number()
+  .transform((value, original) => (original === "" ? undefined : value))
+  .typeError("Price must be a number")
+  .min(0, "Price cannot be negative");
+
+const stockCount = yup
+  .number()
+  .transform((value, original) => (original === "" ? undefined : value))
+  .typeError("Stock must be a number")
+  .integer("Stock must be a whole number")
+  .min(0, "Stock cannot be negative");
+
+export const OutletPriceValidation = yup.object({
+  price: optionalPrice,
+  stock: stockCount.required("Stock is required"),
+});
+
+export const isValidOutletPrice = (value) => optionalPrice.isValidSync(value);
+
+export const isValidStock = (value) => stockCount.isValidSync(value);

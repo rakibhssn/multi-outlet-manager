@@ -1,12 +1,14 @@
 import React from "react";
 import { Link } from "react-router";
-import { LuDownload, LuEye, LuPencil, LuTrash2 } from "react-icons/lu";
+import { LuArrowLeftRight, LuDownload, LuEye, LuHistory, LuPencil, LuTrash2 } from "react-icons/lu";
 import { cn } from "@/lib/utils";
 import CustomTooltip from "./CustomTooltip";
 
 const ACTIONS = {
   view: { icon: LuEye, title: "View" },
   edit: { icon: LuPencil, title: "Edit" },
+  history: { icon: LuHistory, title: "History" },
+  transfer: { icon: LuArrowLeftRight, title: "Transfer" },
   download: { icon: LuDownload, title: "Download" },
   remove: { icon: LuTrash2, title: "Delete", className: "action-btn-danger" },
 };
@@ -21,6 +23,14 @@ export default function ActionComp({
   editLabel,
   editTitle,
   editAction,
+  history = false,
+  historyLabel,
+  historyTitle,
+  historyAction,
+  transfer = false,
+  transferLabel,
+  transferTitle,
+  transferAction,
   download = false,
   downloadLabel,
   downloadTitle,
@@ -38,6 +48,12 @@ export default function ActionComp({
       )}
       {edit && (
         <ActionButton type="edit" label={editLabel} title={editTitle} onClick={editAction} link={editLink} />
+      )}
+      {history && (
+        <ActionButton type="history" label={historyLabel} title={historyTitle} onClick={historyAction} />
+      )}
+      {transfer && (
+        <ActionButton type="transfer" label={transferLabel} title={transferTitle} onClick={transferAction} />
       )}
       {download && (
         <ActionButton type="download" label={downloadLabel} title={downloadTitle} onClick={downloadAction} />

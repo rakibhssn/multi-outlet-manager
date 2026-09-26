@@ -1,67 +1,63 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { useSetAtom } from "jotai";
-import {
-  ActionComp,
-  CustomSelectField,
-  CustomTable,
-  StatusComp,
-} from "@/components/custom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAtom } from "jotai";
+import { ActionComp, CustomTable, StatusComp } from "@/components/custom";
 import { PageHeader } from "@/Screens/Layout/DashboardBlocks";
+import useScope from "@/hooks/useScope";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { DESIGNATION_OPTIONS, EMPLOYMENT_TYPE_OPTIONS } from "@/lib/Constant";
+import { StaffColumn } from "@/lib/TableData/Columns";
 import { confirmModal, emptyNotifyData, notificationModal } from "@/lib/Variables";
-import useScope from "@/hooks/useScope";
 import StaffEntry from "./StaffEntry";
+import StaffHistory from "./StaffHistory";
+import StaffTransfer from "./StaffTransfer";
+
+const DEFAULT_PARAMS = {
+  page: 1,
+  per_page: 10,
+  sort_by: "createdAt",
+  order_by: "desc",
+};
+
+const SEARCH_DEBOUNCE = 400;
 
 const labelOf = (options, value) =>
   options.find((option) => option.value === value)?.label ?? value;
 
-export default function StaffList({ branchId: fixedBranchId, onChange }) {
-  const setNotification = useSetAtom(notificationModal);
-  const setConfirmation = useSetAtom(confirmModal);
-  const [staffs, setStaffs] = useState([]);
-  const [outletOptions, setOutletOptions] = useState([]);
+export default function StaffList({ branchId: fixedBranchId, compact = false, onChange }) {
   const scope = useScope();
   const lockedBranchId = fixedBranchId ?? scope.outletId ?? "";
   const outletLocked = !!lockedBranchId;
-  const [branchId, setBranchId] = useState(lockedBranchId);
+  const canTransfer = !scope.outletId;
   const embedded = !!fixedBranchId;
-  const [pagination, setPagination] = useState({ page: 1, perPage: 10, total: 0 });
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [, setConfirmation] = useAtom(confirmModal);
+  const [, setNotification] = useAtom(notificationModal);
+  const [params, setParams] = useState({
+    ...DEFAULT_PARAMS,
+    branchId: lockedBranchId || undefined,
+    companyId: scope.companyId || undefined,
+  });
+  const [data, setData] = useState({ data: [], total: 0 });
+  const [outletOptions, setOutletOptions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [entry, setEntry] = useState({ open: false, staff: null });
-
-  const { page, perPage } = pagination;
+  const [openModal, setOpenModal] = useState(false);
+  const [staff, setStaff] = useState(null);
+  const [transferStaff, setTransferStaff] = useState(null);
+  const [historyStaff, setHistoryStaff] = useState(null);
 
   const fetchStaffs = useCallback(() => {
     setLoading(true);
 
-    ApiService.get(API_LINK.Staff, {
-      params: {
-        page,
-        perPage,
-        search: debouncedSearch || undefined,
-        branchId: branchId || undefined,
-        companyId: scope.companyId || undefined,
-      },
-    })
+    ApiService.get(API_LINK.Staff, { params })
       .then((res) => {
         if (res.status === "success") {
-          const items = res?.data?.items ?? [];
-          const total = res?.data?.pagination?.total ?? 0;
-          setStaffs(items);
-          setPagination((prev) =>
-            !items.length && prev.page > 1
-              ? { ...prev, total, page: prev.page - 1 }
-              : { ...prev, total },
-          );
+          setData({ data: res?.data ?? [], total: res?.total ?? 0 });
         } else {
           setNotification({
             open: true,
             title: "Error",
             description: res.message,
+            type: "error",
           });
         }
       })
@@ -70,12 +66,13 @@ export default function StaffList({ branchId: fixedBranchId, onChange }) {
           open: true,
           title: "Error",
           description: error?.response?.data?.message ?? "Failed to load staff",
+          type: "error",
         });
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [page, perPage, debouncedSearch, branchId, scope.companyId, setNotification]);
+  }, [params, setNotification]);
 
   useEffect(() => {
     fetchStaffs();
@@ -83,12 +80,17 @@ export default function StaffList({ branchId: fixedBranchId, onChange }) {
 
   useEffect(() => {
     ApiService.get(API_LINK.Outlet, {
-      params: { perPage: 100, companyId: scope.companyId || undefined },
+      params: {
+        per_page: 100,
+        sort_by: "name",
+        order_by: "asc",
+        companyId: scope.companyId || undefined,
+      },
     })
       .then((res) => {
         if (res.status === "success") {
           setOutletOptions(
-            (res?.data?.items ?? []).map((item) => ({
+            (res?.data ?? []).map((item) => ({
               label: item.parent?.name ? `${item.name} (${item.parent.name})` : item.name,
               value: item.id,
             })),
@@ -98,6 +100,7 @@ export default function StaffList({ branchId: fixedBranchId, onChange }) {
             open: true,
             title: "Error",
             description: res.message,
+            type: "error",
           });
         }
       })
@@ -106,170 +109,207 @@ export default function StaffList({ branchId: fixedBranchId, onChange }) {
           open: true,
           title: "Error",
           description: error?.response?.data?.message ?? "Failed to load outlets",
+          type: "error",
         });
       });
   }, [scope.companyId, setNotification]);
 
-  useEffect(() => {
-    const next = search.trim();
-    if (next === debouncedSearch) return undefined;
-    const timer = setTimeout(() => {
-      setDebouncedSearch(next);
-      setPagination((prev) => ({ ...prev, page: 1 }));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [search, debouncedSearch]);
-
-  function toggleStatus(staff) {
-    ApiService.patch(API_LINK.StaffStatus(staff.id))
-      .then((res) => {
-        if (res.status === "success") {
+  const handleStatusChange = useCallback(
+    (item) => {
+      ApiService.patch(API_LINK.StaffStatus(item.id))
+        .then((res) => {
           setNotification({
             open: true,
-            title: "Success",
+            title: res.status === "success" ? "Success" : "Error",
             description: res?.message,
+            type: res.status === "success" ? "success" : "error",
           });
-          fetchStaffs();
-          onChange?.();
-        } else {
+          if (res.status === "success") {
+            fetchStaffs();
+            onChange?.();
+          }
+        })
+        .catch((error) => {
           setNotification({
             open: true,
             title: "Error",
-            description: res.message,
+            description: error?.response?.data?.message ?? "Failed to change status",
+            type: "error",
           });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to change status",
         });
-      });
-  }
+    },
+    [fetchStaffs, onChange, setNotification],
+  );
 
-  function confirmDelete(staff) {
-    setConfirmation({
-      open: true,
-      title: "Delete Staff",
-      description: `"${staff.firstName} ${staff.lastName}" and their login account will be removed permanently.`,
-      footer: true,
-      remove: true,
-      submitLabel: "Delete",
-      submitClick: () =>
-        ApiService.delete(API_LINK.StaffDetails(staff.id))
-          .then((res) => {
-            if (res.status === "success") {
-              setNotification({
-                open: true,
-                title: "Success",
-                description: res?.message,
-              });
-              fetchStaffs();
-              onChange?.();
-            } else {
-              setNotification({
-                open: true,
-                title: "Error",
-                description: res.message,
-              });
-            }
-          })
-          .catch((error) => {
-            setNotification({
-              open: true,
-              title: "Error",
-              description: error?.response?.data?.message ?? "Failed to delete staff",
-            });
-          })
-          .finally(() => {
+  const removeStaff = useCallback(
+    (item) => {
+      ApiService.delete(API_LINK.StaffDetails(item.id))
+        .then((res) => {
+          setNotification({
+            open: true,
+            title: res.status === "success" ? "Success" : "Error",
+            description: res?.message,
+            type: res.status === "success" ? "success" : "error",
+          });
+          if (res.status === "success") {
+            fetchStaffs();
+            onChange?.();
             setConfirmation(emptyNotifyData);
-          }),
-    });
-  }
+          }
+        })
+        .catch((error) => {
+          setNotification({
+            open: true,
+            title: "Error",
+            description: error?.response?.data?.message ?? "Failed to delete staff",
+            type: "error",
+          });
+        });
+    },
+    [fetchStaffs, onChange, setConfirmation, setNotification],
+  );
 
-  const columns = [
-    {
-      key: "name",
-      title: "Staff",
-      dataIndex: "firstName",
-      render: (firstName, record) => (
+  const handleDelete = useCallback(
+    (item) => {
+      const confirmationPayload = {
+        open: true,
+        title: "Remove Staff",
+        description: "",
+        body: `Are you sure to remove "${item.firstName} ${item.lastName}" and their login account?`,
+        type: "success",
+        footer: true,
+        cancelButton: true,
+        remove: true,
+        submitLabel: "Delete",
+        submitClick: () => removeStaff(item),
+      };
+
+      setConfirmation(confirmationPayload);
+    },
+    [removeStaff, setConfirmation],
+  );
+
+  const columns = useMemo(
+    () =>
+      StaffColumn.filter((column) => {
+        if (column.key === "outlet") return !outletLocked;
+        if (["id", "worked", "contact", "account"].includes(column.key)) return !compact;
+        return true;
+      }),
+    [outletLocked, compact],
+  );
+
+  const staffs = useMemo(() => {
+    if (!data.data || data.data.length === 0) return [];
+
+    const offset = (params.page - 1) * params.per_page;
+
+    return data.data.map((item, index) => ({
+      key: item.id,
+      id: 1 + index + offset,
+      name: (
         <div className="cell-stack">
-          <span className="cell-title">{`${firstName} ${record.lastName}`}</span>
-          <span className="cell-sub">Badge {record.badgeNumber}</span>
+          <span className="cell-title">{`${item.firstName} ${item.lastName}`}</span>
+          <span className="cell-sub">Badge {item.badgeNumber}</span>
         </div>
       ),
-    },
-    ...(outletLocked
-      ? []
-      : [
-          {
-            key: "outlet",
-            title: "Outlet",
-            dataIndex: "outlet.name",
-            render: (name, record) => (
-              <div className="cell-stack">
-                <span className="cell-title">{name}</span>
-                <span className="cell-sub">{record.outlet?.parent?.name}</span>
-              </div>
-            ),
-          },
-        ]),
-    {
-      key: "job",
-      title: "Job",
-      dataIndex: "designation",
-      render: (designation, record) => (
+      outlet: (
         <div className="cell-stack">
-          <span className="cell-title">{labelOf(DESIGNATION_OPTIONS, designation)}</span>
-          <span className="cell-sub">
-            {labelOf(EMPLOYMENT_TYPE_OPTIONS, record.employmentType)}
-          </span>
+          <span className="cell-title">{item.outlet?.name}</span>
+          <span className="cell-sub">{item.outlet?.parent?.name}</span>
         </div>
       ),
-    },
-    {
-      key: "contact",
-      title: "Contact",
-      dataIndex: "phone",
-      render: (phone, record) => (
+      job: (
         <div className="cell-stack">
-          <span className="cell-title">{phone}</span>
-          <span className="cell-sub">{record.email}</span>
+          <span className="cell-title">{labelOf(DESIGNATION_OPTIONS, item.designation)}</span>
+          <span className="cell-sub">{labelOf(EMPLOYMENT_TYPE_OPTIONS, item.employmentType)}</span>
         </div>
       ),
-    },
-    {
-      key: "account",
-      title: "Login Account",
-      dataIndex: "users.0.email",
-      render: (email) => <span className="cell-title">{email ?? "No account"}</span>,
-    },
-    {
-      key: "status",
-      title: "Status",
-      dataIndex: "status",
-      render: (status, record) => (
-        <StatusComp type={status} onClick={() => toggleStatus(record)} />
+      worked: (
+        <button
+          type="button"
+          className="worked-count"
+          aria-label={`View work history of ${item.firstName} ${item.lastName}`}
+          onClick={() => setHistoryStaff(item)}
+        >
+          {item.outletsWorked ?? 0}
+        </button>
       ),
-    },
-    {
-      key: "actions",
-      title: "Actions",
-      align: "right",
-      render: (_, record) => (
+      contact: (
+        <div className="cell-stack">
+          <span className="cell-title">{item.phone}</span>
+          <span className="cell-sub">{item.email}</span>
+        </div>
+      ),
+      account: <span className="cell-title">{item.users?.[0]?.email ?? "No account"}</span>,
+      status: <StatusComp type={item.status} onClick={() => handleStatusChange(item)} />,
+      action: (
         <ActionComp
           className="justify-end"
-          edit
-          editTitle="Edit staff"
-          editAction={() => setEntry({ open: true, staff: record })}
-          remove
-          deleteTitle="Delete staff"
-          deleteAction={() => confirmDelete(record)}
+          history={true}
+          historyTitle="Work history"
+          historyAction={() => setHistoryStaff(item)}
+          transfer={canTransfer}
+          transferTitle="Transfer to another outlet"
+          transferAction={() => setTransferStaff(item)}
+          edit={true}
+          editTitle="Edit"
+          editAction={() => {
+            setStaff(item);
+            setOpenModal(true);
+          }}
+          remove={true}
+          deleteTitle="Delete"
+          deleteAction={() => handleDelete(item)}
         />
       ),
+    }));
+  }, [data, params.page, params.per_page, canTransfer, handleStatusChange, handleDelete]);
+
+  const handleChanges = useCallback(
+    ({ page, pageSize, sortField, sort, filter }) => {
+      setParams((prev) => ({
+        ...prev,
+        page,
+        per_page: pageSize,
+        sort_by: sortField ?? DEFAULT_PARAMS.sort_by,
+        order_by: sort?.direction ?? DEFAULT_PARAMS.order_by,
+        branchId: lockedBranchId || filter || undefined,
+      }));
     },
-  ];
+    [lockedBranchId],
+  );
+
+  const handleSearch = useCallback((value) => {
+    const search = value.trim();
+    setParams((prev) => ({
+      ...prev,
+      page: 1,
+      search_by: search || undefined,
+    }));
+  }, []);
+
+  const searchTimer = useRef(null);
+
+  const debouncedSearch = useCallback(
+    (value) => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+      searchTimer.current = setTimeout(() => handleSearch(value), SEARCH_DEBOUNCE);
+    },
+    [handleSearch],
+  );
+
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
+
+  function handleAddStaff() {
+    setStaff(null);
+    setOpenModal(true);
+  }
 
   return (
     <div className={embedded ? "page-section" : "page"}>
@@ -278,54 +318,56 @@ export default function StaffList({ branchId: fixedBranchId, onChange }) {
       )}
 
       <CustomTable
-        columns={columns}
-        dataSource={staffs}
-        loading={loading}
         title={embedded ? "Staffs" : undefined}
         description={embedded ? "Staff working in this outlet" : undefined}
-        searchPlaceholder="Search name, badge, phone or job..."
-        searchValue={search}
-        onSearchChange={setSearch}
-        actions={
-          !outletLocked && (
-            <CustomSelectField
-              name="outletFilter"
-              placeholder="All outlets"
-              options={[{ label: "All outlets", value: "all" }, ...outletOptions]}
-              value={branchId || "all"}
-              onValueChange={(value) => {
-                setBranchId(value === "all" ? "" : value);
-                setPagination((prev) => ({ ...prev, page: 1 }));
-              }}
-              className="table-filter"
-            />
-          )
-        }
-        total={pagination.total}
-        page={page}
-        pageSize={perPage}
-        onPageChange={(next) => setPagination((prev) => ({ ...prev, page: next }))}
-        onPageSizeChange={(size) =>
-          setPagination((prev) => ({ ...prev, perPage: size, page: 1 }))
-        }
-        emptyMessage="No staff yet"
-        onReload={fetchStaffs}
-        onAdd={() => setEntry({ open: true, staff: null })}
+        columns={columns}
+        dataSource={staffs}
+        rowKey="key"
+        loading={loading}
+        total={data.total}
+        pageSize={params.per_page}
+        onChange={handleChanges}
+        onSearch={debouncedSearch}
+        filterOptions={outletLocked ? undefined : outletOptions}
+        filterPlaceholder="All outlets"
         addLabel="Add Staff"
+        onAdd={handleAddStaff}
+        reloadAction={fetchStaffs}
+        showReload={true}
+        searchPlaceholder="Search name, badge, phone or job..."
+        emptyText="No staff has been added yet"
       />
 
       <StaffEntry
-        open={entry.open}
-        staff={entry.staff}
-        branchId={branchId}
+        open={openModal}
+        staff={staff}
+        branchId={params.branchId}
         outletOptions={outletOptions}
         lockOutlet={outletLocked}
-        onClose={() => setEntry({ open: false, staff: null })}
+        onClose={() => setOpenModal(false)}
         onSaved={() => {
-          setEntry({ open: false, staff: null });
+          setOpenModal(false);
           fetchStaffs();
           onChange?.();
         }}
+      />
+
+      <StaffTransfer
+        open={!!transferStaff}
+        staff={transferStaff}
+        outletOptions={outletOptions}
+        onClose={() => setTransferStaff(null)}
+        onSaved={() => {
+          setTransferStaff(null);
+          fetchStaffs();
+          onChange?.();
+        }}
+      />
+
+      <StaffHistory
+        open={!!historyStaff}
+        staff={historyStaff}
+        onClose={() => setHistoryStaff(null)}
       />
     </div>
   );

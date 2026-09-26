@@ -8,25 +8,25 @@ const companyOnly = { parentId: null, ...branch.withoutDeveloper };
 class Company {
   async list(req, res) {
     try {
-      const page = branch.paging(req.query);
-      const where = { ...companyOnly, ...branch.searchWhere(req.query) };
+      const list = branch.listParams(req.query, { sortable: ["name", "contactPersonName", "city", "status", "createdAt"] });
+      const where = {
+        ...companyOnly,
+        ...(req.query.status ? { status: req.query.status } : {}),
+        ...branch.searchWhere(list.search),
+      };
 
-      const [total, companies] = await prisma.$transaction([
-        prisma.company.count({ where }),
+      const [companies, total] = await prisma.$transaction([
         prisma.company.findMany({
           where,
           include: branch.accountInclude,
-          orderBy: { createdAt: "desc" },
-          skip: page.skip,
-          take: page.take,
+          orderBy: list.orderBy,
+          skip: list.skip,
+          take: list.take,
         }),
+        prisma.company.count({ where }),
       ]);
 
-      return response.success(
-        res,
-        branch.paginated(companies, total, page),
-        "Company List Fetched Successfully",
-      );
+      return response.list(res, companies, total, "Company List Fetched Successfully");
     } catch (error) {
       return branch.handleError(res, error, "Company");
     }

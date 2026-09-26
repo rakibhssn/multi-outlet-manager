@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const expressLimit = require("express-rate-limit");
 const { ACCESS_DENIED } = require("./routes/api_init_error");
+const { UPLOAD_ROOT } = require("./controller/Upload");
 
 const PORT = process.env.PORT || 3050;
 const limiter = expressLimit({
@@ -15,6 +16,7 @@ const app = express();
 app.disable("x-powered-by");
 app.use(cors());
 app.use(express.json());
+app.use("/uploads", express.static(UPLOAD_ROOT, { maxAge: "7d" }));
 
 app.use(limiter);
 

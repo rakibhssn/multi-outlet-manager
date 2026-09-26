@@ -13,12 +13,10 @@ import { breadcrumbLabels, notificationModal, userData } from "@/lib/Variables";
 import { isDeveloper } from "@/lib/Menus";
 import useScope from "@/hooks/useScope";
 import OutletEntry from "./OutletEntry";
-
-const humanize = (value) =>
-  String(value ?? "")
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+import OutletItemList from "./OutletItemList";
+import OutletStockOut from "./OutletStockOut";
+import OutletSalesChart from "./OutletSalesChart";
+import OutletSummaryCard from "./OutletSummaryCard";
 
 export default function OutletDetails() {
   const { id } = useParams();
@@ -31,6 +29,7 @@ export default function OutletDetails() {
   const [companyOptions, setCompanyOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+  const [stockOutOpen, setStockOutOpen] = useState(false);
 
   const fetchOutlet = useCallback(() => {
     setLoading(true);
@@ -66,11 +65,11 @@ export default function OutletDetails() {
   }, [fetchOutlet]);
 
   useEffect(() => {
-    ApiService.get(API_LINK.Company, { params: { perPage: 100 } })
+    ApiService.get(API_LINK.Company, { params: { per_page: 100, sort_by: "name", order_by: "asc" } })
       .then((res) => {
         if (res.status === "success") {
           setCompanyOptions(
-            (res?.data?.items ?? []).map((item) => ({ label: item.name, value: item.id })),
+            (res?.data ?? []).map((item) => ({ label: item.name, value: item.id })),
           );
         } else {
           setNotification({
@@ -119,13 +118,27 @@ export default function OutletDetails() {
     );
   }
 
-  const account = outlet.users?.[0];
 
   return (
     <div className="page">
       <PageHeader
         title={outlet.name}
-        subtitle="Outlet details and its staff"
+        subtitle={
+          <span className="page-meta">
+            {outlet.parent &&
+              (isDeveloper(user) ? (
+                <Link to={`/hq/company/${outlet.parent.id}`} className="detail-link">
+                  {outlet.parent.name}
+                </Link>
+              ) : (
+                <span>{outlet.parent.name}</span>
+              ))}
+            <StatusComp type={outlet.status} />
+            {outlet.createdAt && (
+              <span>Since {format(new Date(outlet.createdAt), "dd MMM yyyy")}</span>
+            )}
+          </span>
+        }
         actions={
           <>
             {back}
@@ -135,29 +148,6 @@ export default function OutletDetails() {
       />
 
       <div className="detail-grid">
-        <DetailCard
-          title="Outlet"
-          items={[
-            { label: "Name", value: outlet.name },
-            {
-              label: "Company",
-              value:
-                outlet.parent && isDeveloper(user) ? (
-                  <Link to={`/hq/company/${outlet.parent.id}`} className="detail-link">
-                    {outlet.parent.name}
-                  </Link>
-                ) : (
-                  outlet.parent?.name
-                ),
-            },
-            { label: "Status", value: <StatusComp type={outlet.status} /> },
-            { label: "Staff", value: String(outlet._count?.staffs ?? 0) },
-            {
-              label: "Created",
-              value: outlet.createdAt ? format(new Date(outlet.createdAt), "dd MMM yyyy") : null,
-            },
-          ]}
-        />
         <DetailCard
           title="Contact Person"
           items={[
@@ -178,17 +168,27 @@ export default function OutletDetails() {
             { label: "Country", value: outlet.country },
           ]}
         />
-        <DetailCard
-          title="Login Account"
-          items={[
-            { label: "Email", value: account?.email ?? "No account yet" },
-            { label: "Role", value: account ? humanize(account.role) : null },
-            { label: "Status", value: account ? <StatusComp type={account.status} /> : null },
-          ]}
+        <OutletSalesChart
+          data={outlet.summary?.dailySales ?? []}
+          sample={!!outlet.summary?.dailySalesSample}
+        />
+        <OutletSummaryCard
+          summary={outlet.summary}
+          onStockOutClick={() => setStockOutOpen(true)}
         />
       </div>
 
-      <StaffList key={id} branchId={id} onChange={fetchOutlet} />
+      <div className="outlet-lists">
+        <StaffList key={id} branchId={id} compact onChange={fetchOutlet} />
+        <OutletItemList key={`items-${id}`} outlet={outlet} onChange={fetchOutlet} />
+      </div>
+
+      <OutletStockOut
+        open={stockOutOpen}
+        outlet={outlet}
+        onClose={() => setStockOutOpen(false)}
+        onChange={fetchOutlet}
+      />
 
       <OutletEntry
         open={editOpen}
