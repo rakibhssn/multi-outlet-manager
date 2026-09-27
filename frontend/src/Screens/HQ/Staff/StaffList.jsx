@@ -1,13 +1,23 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtom } from "jotai";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActionComp, CustomTable, StatusComp } from "@/components/custom";
 import { PageHeader } from "@/Screens/Layout/DashboardBlocks";
+import { StackCell } from "@/Screens/Layout/TableCells";
+import useCan from "@/hooks/useCan";
+import useConfirm from "@/hooks/useConfirm";
+import useNotify from "@/hooks/useNotify";
+import useRemoteOptions from "@/hooks/useRemoteOptions";
 import useScope from "@/hooks/useScope";
+import useTableList from "@/hooks/useTableList";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { DESIGNATION_OPTIONS, EMPLOYMENT_TYPE_OPTIONS } from "@/lib/Constant";
+import {
+  fullName,
+  labelOf,
+  outletOption,
+  roleLabel,
+} from "@/lib/Functions/Common";
 import { StaffColumn } from "@/lib/TableData/Columns";
-import { confirmModal, emptyNotifyData, notificationModal } from "@/lib/Variables";
 import StaffEntry from "./StaffEntry";
 import StaffHistory from "./StaffHistory";
 import StaffTransfer from "./StaffTransfer";
@@ -19,302 +29,188 @@ const DEFAULT_PARAMS = {
   order_by: "desc",
 };
 
-const SEARCH_DEBOUNCE = 400;
+const OUTLET_ACCOUNTS = ["OUTLET", "OUTLET_STAFF"];
 
-const labelOf = (options, value) =>
-  options.find((option) => option.value === value)?.label ?? value;
-
-export default function StaffList({ branchId: fixedBranchId, compact = false, onChange }) {
+export default function StaffList({
+  branchId: fixedBranchId,
+  branchName,
+  compact = false,
+  onChange,
+}) {
   const scope = useScope();
+  const notify = useNotify();
+  const confirm = useConfirm();
+  const can = useCan();
   const lockedBranchId = fixedBranchId ?? scope.outletId ?? "";
   const outletLocked = !!lockedBranchId;
-  const canTransfer = !scope.outletId;
   const embedded = !!fixedBranchId;
-  const [, setConfirmation] = useAtom(confirmModal);
-  const [, setNotification] = useAtom(notificationModal);
-  const [params, setParams] = useState({
-    ...DEFAULT_PARAMS,
-    branchId: lockedBranchId || undefined,
-    companyId: scope.companyId || undefined,
+  const outletAccount = OUTLET_ACCOUNTS.includes(scope.accountType);
+  const canCreate = can("staff.create");
+  const canEdit = can("staff.edit");
+  const canDelete = can("staff.delete");
+  const canTransfer = !scope.outletId && can("staff.transfer");
+  const canViewHistory = !outletAccount && can("staff.history");
+  const hasActions = canEdit || canDelete || canTransfer || canViewHistory;
+
+  const { rows, offset, reload, params, ...table } = useTableList({
+    url: API_LINK.Staff,
+    defaults: DEFAULT_PARAMS,
+    initialParams: {
+      branchId: lockedBranchId || undefined,
+      companyId: scope.companyId || undefined,
+      id: outletAccount ? scope.userId : undefined,
+    },
+    filterParam: (filter) => ({ branchId: lockedBranchId || filter }),
+    errorText: "Failed to load staff",
   });
-  const [data, setData] = useState({ data: [], total: 0 });
-  const [outletOptions, setOutletOptions] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [staff, setStaff] = useState(null);
   const [transferStaff, setTransferStaff] = useState(null);
   const [historyStaff, setHistoryStaff] = useState(null);
 
-  const fetchStaffs = useCallback(() => {
-    setLoading(true);
+  const outletFilter = useRemoteOptions({
+    url: API_LINK.Outlet,
+    params: { companyId: scope.companyId || undefined },
+    mapOption: outletOption,
+    enabled: !outletLocked,
+    errorText: "Failed to load outlets",
+  });
 
-    ApiService.get(API_LINK.Staff, { params })
-      .then((res) => {
-        if (res.status === "success") {
-          setData({ data: res?.data ?? [], total: res?.total ?? 0 });
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-            type: "error",
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load staff",
-          type: "error",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [params, setNotification]);
-
-  useEffect(() => {
-    fetchStaffs();
-  }, [fetchStaffs]);
-
-  useEffect(() => {
-    ApiService.get(API_LINK.Outlet, {
-      params: {
-        per_page: 100,
-        sort_by: "name",
-        order_by: "asc",
-        companyId: scope.companyId || undefined,
-      },
-    })
-      .then((res) => {
-        if (res.status === "success") {
-          setOutletOptions(
-            (res?.data ?? []).map((item) => ({
-              label: item.parent?.name ? `${item.name} (${item.parent.name})` : item.name,
-              value: item.id,
-            })),
-          );
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-            type: "error",
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load outlets",
-          type: "error",
-        });
-      });
-  }, [scope.companyId, setNotification]);
-
-  const handleStatusChange = useCallback(
-    (item) => {
-      ApiService.patch(API_LINK.StaffStatus(item.id))
-        .then((res) => {
-          setNotification({
-            open: true,
-            title: res.status === "success" ? "Success" : "Error",
-            description: res?.message,
-            type: res.status === "success" ? "success" : "error",
-          });
-          if (res.status === "success") {
-            fetchStaffs();
-            onChange?.();
+  const lockedOutlet = useMemo(
+    () =>
+      lockedBranchId
+        ? {
+            value: lockedBranchId,
+            label: branchName ?? scope.outletName ?? "This outlet",
           }
-        })
-        .catch((error) => {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: error?.response?.data?.message ?? "Failed to change status",
-            type: "error",
-          });
-        });
-    },
-    [fetchStaffs, onChange, setNotification],
+        : null,
+    [lockedBranchId, branchName, scope.outletName],
   );
 
-  const removeStaff = useCallback(
-    (item) => {
-      ApiService.delete(API_LINK.StaffDetails(item.id))
-        .then((res) => {
-          setNotification({
-            open: true,
-            title: res.status === "success" ? "Success" : "Error",
-            description: res?.message,
-            type: res.status === "success" ? "success" : "error",
-          });
-          if (res.status === "success") {
-            fetchStaffs();
-            onChange?.();
-            setConfirmation(emptyNotifyData);
-          }
-        })
-        .catch((error) => {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: error?.response?.data?.message ?? "Failed to delete staff",
-            type: "error",
-          });
-        });
-    },
-    [fetchStaffs, onChange, setConfirmation, setNotification],
-  );
+  const refresh = useCallback(() => {
+    reload();
+    onChange?.();
+  }, [reload, onChange]);
 
-  const handleDelete = useCallback(
-    (item) => {
-      const confirmationPayload = {
-        open: true,
-        title: "Remove Staff",
-        description: "",
-        body: `Are you sure to remove "${item.firstName} ${item.lastName}" and their login account?`,
-        type: "success",
-        footer: true,
-        cancelButton: true,
-        remove: true,
-        submitLabel: "Delete",
-        submitClick: () => removeStaff(item),
-      };
-
-      setConfirmation(confirmationPayload);
-    },
-    [removeStaff, setConfirmation],
-  );
+  const openEntry = (item) => {
+    setStaff(item);
+    setOpenModal(true);
+  };
 
   const columns = useMemo(
     () =>
       StaffColumn.filter((column) => {
         if (column.key === "outlet") return !outletLocked;
-        if (["id", "worked", "contact", "account"].includes(column.key)) return !compact;
+        if (column.key === "worked") return !compact && canViewHistory;
+        if (column.key === "action") return hasActions;
+        if (["id", "contact", "account"].includes(column.key)) return !compact;
         return true;
       }),
-    [outletLocked, compact],
+    [outletLocked, compact, canViewHistory, hasActions],
   );
 
   const staffs = useMemo(() => {
-    if (!data.data || data.data.length === 0) return [];
+    const toggleStatus = (item) =>
+      notify.submit(ApiService.patch(API_LINK.StaffStatus(item.id)), {
+        errorText: "Failed to change status",
+        onSuccess: refresh,
+      });
 
-    const offset = (params.page - 1) * params.per_page;
+    const removeStaff = (item) =>
+      confirm.remove({
+        title: "Remove Staff",
+        body: `Are you sure to remove "${fullName(item)}" and their login account?`,
+        onConfirm: () =>
+          notify.submit(ApiService.delete(API_LINK.StaffDetails(item.id)), {
+            errorText: "Failed to delete staff",
+            onSuccess: () => {
+              refresh();
+              confirm.close();
+            },
+          }),
+      });
 
-    return data.data.map((item, index) => ({
+    return rows.map((item, index) => ({
       key: item.id,
       id: 1 + index + offset,
       name: (
-        <div className="cell-stack">
-          <span className="cell-title">{`${item.firstName} ${item.lastName}`}</span>
-          <span className="cell-sub">Badge {item.badgeNumber}</span>
-        </div>
+        <StackCell
+          title={fullName(item)}
+          subtitle={`Badge ${item.badgeNumber}${item.shifts?.length ? " · On shift" : ""}`}
+        />
       ),
       outlet: (
-        <div className="cell-stack">
-          <span className="cell-title">{item.outlet?.name}</span>
-          <span className="cell-sub">{item.outlet?.parent?.name}</span>
-        </div>
+        <StackCell
+          title={item.outlet?.name}
+          subtitle={item.outlet?.parent?.name}
+        />
       ),
       job: (
-        <div className="cell-stack">
-          <span className="cell-title">{labelOf(DESIGNATION_OPTIONS, item.designation)}</span>
-          <span className="cell-sub">{labelOf(EMPLOYMENT_TYPE_OPTIONS, item.employmentType)}</span>
-        </div>
+        <StackCell
+          title={labelOf(DESIGNATION_OPTIONS, item.designation)}
+          subtitle={labelOf(EMPLOYMENT_TYPE_OPTIONS, item.employmentType)}
+        />
       ),
       worked: (
         <button
           type="button"
           className="worked-count"
-          aria-label={`View work history of ${item.firstName} ${item.lastName}`}
+          aria-label={`View work history of ${fullName(item)}`}
           onClick={() => setHistoryStaff(item)}
         >
           {item.outletsWorked ?? 0}
         </button>
       ),
-      contact: (
-        <div className="cell-stack">
-          <span className="cell-title">{item.phone}</span>
-          <span className="cell-sub">{item.email}</span>
-        </div>
+      contact: <StackCell title={item.phone} subtitle={item.email} />,
+      account: (
+        <StackCell
+          title={item.users?.[0]?.email ?? "No account"}
+          subtitle={roleLabel(item.users?.[0])}
+        />
       ),
-      account: <span className="cell-title">{item.users?.[0]?.email ?? "No account"}</span>,
-      status: <StatusComp type={item.status} onClick={() => handleStatusChange(item)} />,
+      status: (
+        <StatusComp
+          type={item.status}
+          onClick={canEdit ? () => toggleStatus(item) : undefined}
+        />
+      ),
       action: (
         <ActionComp
           className="justify-end"
-          history={true}
+          history={canViewHistory}
           historyTitle="Work history"
           historyAction={() => setHistoryStaff(item)}
           transfer={canTransfer}
           transferTitle="Transfer to another outlet"
           transferAction={() => setTransferStaff(item)}
-          edit={true}
+          edit={canEdit}
           editTitle="Edit"
-          editAction={() => {
-            setStaff(item);
-            setOpenModal(true);
-          }}
-          remove={true}
+          editAction={() => openEntry(item)}
+          remove={canDelete}
           deleteTitle="Delete"
-          deleteAction={() => handleDelete(item)}
+          deleteAction={() => removeStaff(item)}
         />
       ),
     }));
-  }, [data, params.page, params.per_page, canTransfer, handleStatusChange, handleDelete]);
-
-  const handleChanges = useCallback(
-    ({ page, pageSize, sortField, sort, filter }) => {
-      setParams((prev) => ({
-        ...prev,
-        page,
-        per_page: pageSize,
-        sort_by: sortField ?? DEFAULT_PARAMS.sort_by,
-        order_by: sort?.direction ?? DEFAULT_PARAMS.order_by,
-        branchId: lockedBranchId || filter || undefined,
-      }));
-    },
-    [lockedBranchId],
-  );
-
-  const handleSearch = useCallback((value) => {
-    const search = value.trim();
-    setParams((prev) => ({
-      ...prev,
-      page: 1,
-      search_by: search || undefined,
-    }));
-  }, []);
-
-  const searchTimer = useRef(null);
-
-  const debouncedSearch = useCallback(
-    (value) => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-      searchTimer.current = setTimeout(() => handleSearch(value), SEARCH_DEBOUNCE);
-    },
-    [handleSearch],
-  );
-
-  useEffect(
-    () => () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-    },
-    [],
-  );
-
-  function handleAddStaff() {
-    setStaff(null);
-    setOpenModal(true);
-  }
+  }, [
+    rows,
+    offset,
+    refresh,
+    canEdit,
+    canDelete,
+    canTransfer,
+    canViewHistory,
+    notify,
+    confirm,
+  ]);
 
   return (
     <div className={embedded ? "page-section" : "page"}>
       {!embedded && (
-        <PageHeader title="Staffs" subtitle="Staff working in each outlet and their login accounts" />
+        <PageHeader
+          title="Staffs"
+          subtitle="Staff working in each outlet and their login accounts"
+        />
       )}
 
       <CustomTable
@@ -323,16 +219,18 @@ export default function StaffList({ branchId: fixedBranchId, compact = false, on
         columns={columns}
         dataSource={staffs}
         rowKey="key"
-        loading={loading}
-        total={data.total}
+        loading={table.loading}
+        total={table.total}
         pageSize={params.per_page}
-        onChange={handleChanges}
-        onSearch={debouncedSearch}
-        filterOptions={outletLocked ? undefined : outletOptions}
+        onChange={table.onChange}
+        onSearch={table.onSearch}
+        filterOptions={outletLocked ? undefined : outletFilter.options}
         filterPlaceholder="All outlets"
+        onFilterSearch={outletFilter.onSearch}
+        filterLoading={outletFilter.loading}
         addLabel="Add Staff"
-        onAdd={handleAddStaff}
-        reloadAction={fetchStaffs}
+        onAdd={canCreate ? () => openEntry(null) : undefined}
+        reloadAction={reload}
         showReload={true}
         searchPlaceholder="Search name, badge, phone or job..."
         emptyText="No staff has been added yet"
@@ -342,25 +240,27 @@ export default function StaffList({ branchId: fixedBranchId, compact = false, on
         open={openModal}
         staff={staff}
         branchId={params.branchId}
-        outletOptions={outletOptions}
+        lockedOutlet={
+          lockedOutlet ??
+          outletFilter.options.find(
+            (option) => option.value === params.branchId,
+          )
+        }
         lockOutlet={outletLocked}
         onClose={() => setOpenModal(false)}
         onSaved={() => {
           setOpenModal(false);
-          fetchStaffs();
-          onChange?.();
+          refresh();
         }}
       />
 
       <StaffTransfer
         open={!!transferStaff}
         staff={transferStaff}
-        outletOptions={outletOptions}
         onClose={() => setTransferStaff(null)}
         onSaved={() => {
           setTransferStaff(null);
-          fetchStaffs();
-          onChange?.();
+          refresh();
         }}
       />
 

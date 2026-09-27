@@ -42,6 +42,8 @@ export default function AutoCompleteField({
   const wrapperRef = useRef(null);
   const listRef = useRef(null);
   const skipBlur = useRef(false);
+  const lastSelected = useRef(null);
+  const emitted = useRef("");
   const items = useMemo(() => normalizeOptions(options), [options]);
   const current = value === null || value === undefined ? null : String(value);
   const invalid = !!(showError && error);
@@ -54,10 +56,15 @@ export default function AutoCompleteField({
   const controlledSearch = searchValue !== undefined;
   const search = controlledSearch ? searchValue : internalSearch;
 
-  const selected = useMemo(
-    () => items.find((opt) => opt.value === current) ?? null,
-    [items, current],
-  );
+  const selected = useMemo(() => {
+    const found = items.find((opt) => opt.value === current);
+    if (found) return found;
+    return lastSelected.current?.value === current ? lastSelected.current : null;
+  }, [items, current]);
+
+  useEffect(() => {
+    if (selected) lastSelected.current = selected;
+  }, [selected]);
 
   useEffect(() => {
     if (!open && !controlledSearch) setInternalSearch(selected?.label ?? "");
@@ -87,11 +94,28 @@ export default function AutoCompleteField({
 
   const updateSearch = (next) => {
     if (!controlledSearch) setInternalSearch(next);
+    emitted.current = next;
     onSearch?.(next);
+  };
+
+  const resetSearch = (label) => {
+    if (controlledSearch) {
+      onSearch?.(label);
+      return;
+    }
+    setInternalSearch(label);
+    if (emitted.current) {
+      emitted.current = "";
+      onSearch?.("");
+    }
   };
 
   function openList() {
     if (disabled) return;
+    if (!controlledSearch && emitted.current) {
+      emitted.current = "";
+      onSearch?.("");
+    }
     setTyped(false);
     setHighlight(filtered.findIndex((opt) => opt.value === current));
     setOpen(true);
@@ -101,12 +125,13 @@ export default function AutoCompleteField({
     setOpen(false);
     setTyped(false);
     setHighlight(-1);
-    if (!controlledSearch) setInternalSearch(selected?.label ?? "");
+    if (!controlledSearch) resetSearch(selected?.label ?? "");
   }
 
   const handleSelect = (opt) => {
+    lastSelected.current = opt;
     onValueChange?.(opt.value, name, opt);
-    updateSearch(opt.label);
+    resetSearch(opt.label);
     setOpen(false);
     setTyped(false);
     setHighlight(-1);

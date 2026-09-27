@@ -1,5 +1,11 @@
+const prisma = require("../config/prisma");
+const { revokeAllSessions } = require("../helper/Session");
 const commonController = require("./CommonController");
 const response = require("./Response");
+
+const OUTLET_ACCOUNTS = ["OUTLET", "OUTLET_STAFF"];
+const LOW_STOCK_LIMIT = 10;
+const CRITICAL_STOCK_LIMIT = 3;
 
 const REQUIRED_FIELDS = [
   "name",
@@ -26,7 +32,8 @@ const FIELD_LABELS = {
   MenuItem_menuId_name_key: "item name in this menu",
   MenuItemOutlet_menuItemId_branchId_key: "item in this outlet",
   PermissionBatch_roleId_permissionId_key: "permission in this role",
-  Role_name_key: "role name",
+  Role_key_key: "built-in role",
+  Role_companyId_name_key: "role name in this company",
 };
 
 const branchAccounts = { accountType: { notIn: ["DEVELOPER", "OUTLET_STAFF"] } };
@@ -35,7 +42,13 @@ const withoutDeveloper = { users: { none: { accountType: "DEVELOPER" } } };
 const accountInclude = {
   users: {
     where: branchAccounts,
-    select: { id: true, email: true, role: true, status: true, accountType: true },
+    select: {
+      id: true,
+      email: true,
+      role: { select: { id: true, key: true, name: true } },
+      status: true,
+      accountType: true,
+    },
     orderBy: { createdAt: "asc" },
     take: 1,
   },
@@ -57,11 +70,12 @@ function pickData(body) {
   return data;
 }
 
-function validateBody(body, { requirePassword }) {
-  const missing = REQUIRED_FIELDS.filter((field) => !String(body[field] ?? "").trim());
-  if (missing.length) return `Missing required fields: ${missing.join(", ")}`;
+function missingFields(body, fields) {
+  const missing = fields.filter((field) => !String(body[field] ?? "").trim());
+  return missing.length ? `Missing required fields: ${missing.join(", ")}` : null;
+}
 
-  const { user } = body;
+function validateAccount(user, { requirePassword }) {
   if (!user && !requirePassword) return null;
   if (!user || !String(user.email ?? "").trim()) return "Login email is required!";
   if (!/^\S+@\S+\.\S+$/.test(user.email)) return "Login email is invalid!";
@@ -72,6 +86,10 @@ function validateBody(body, { requirePassword }) {
   return null;
 }
 
+function validateBody(body, options) {
+  return missingFields(body, REQUIRED_FIELDS) ?? validateAccount(body.user, options);
+}
+
 async function accountData(user) {
   const data = { email: user.email.trim().toLowerCase() };
   if (!user.password) return data;
@@ -80,7 +98,7 @@ async function accountData(user) {
   return { ...data, password, hash };
 }
 
-async function saveAccount(tx, branchId, user, { role, accountType }) {
+async function saveAccount(tx, branchId, user, { roleId, accountType }) {
   const data = await accountData(user);
   const account = await tx.user.findFirst({
     where: { branchId, ...branchAccounts },
@@ -89,18 +107,39 @@ async function saveAccount(tx, branchId, user, { role, accountType }) {
   });
 
   if (account) {
-    return tx.user.update({ where: { id: account.id }, data: { ...data, accountType } });
+    const roleData = user.roleId ? { roleId } : {};
+    const passwordData = data.password ? { passwordChangedAt: new Date() } : {};
+    if (data.password) await revokeAllSessions(account.id, tx);
+    return tx.user.update({ where: { id: account.id }, data: { ...data, ...roleData, ...passwordData, accountType } });
   }
   if (!data.password) {
     throw Object.assign(new Error("Password is required to create the login account!"), {
       status: 422,
     });
   }
-  return tx.user.create({ data: { ...data, role, accountType, branchId } });
+  return tx.user.create({ data: { ...data, roleId, accountType, branchId } });
 }
 
 
 
+
+async function viewerOutlet(viewer) {
+  if (!viewer?.userId || !OUTLET_ACCOUNTS.includes(viewer.accountType)) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: viewer.userId },
+    select: { branchId: true },
+  });
+  return user?.branchId ?? null;
+}
+
+function defaultPrice(latest) {
+  if (!latest) return null;
+  return Number(latest.price) > 0 ? Number(latest.price) : Number(latest.basePrice);
+}
+
+function effectivePrice(latest, override) {
+  return override !== null && override !== undefined ? Number(override) : defaultPrice(latest);
+}
 
 function toStock(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -140,7 +179,11 @@ function handleError(res, error, label = "Record") {
   if (error.code === "P2003") {
     return response.error(res, `${label} is linked with other records!`, 409);
   }
-  return response.error(res, error.message, error.status ?? 500);
+  if (error.status >= 400 && error.status < 500) {
+    return response.error(res, error.message, error.status);
+  }
+  console.error(error);
+  return response.error(res, "Something went wrong!", 500);
 }
 
 module.exports = {
@@ -148,10 +191,17 @@ module.exports = {
   withoutDeveloper,
   pickData,
   validateBody,
+  missingFields,
+  validateAccount,
   accountData,
   saveAccount,
   listParams,
   toStock,
+  viewerOutlet,
+  LOW_STOCK_LIMIT,
+  CRITICAL_STOCK_LIMIT,
+  defaultPrice,
+  effectivePrice,
   searchWhere,
   handleError,
 };

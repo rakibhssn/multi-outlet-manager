@@ -2,7 +2,14 @@ const prisma = require("../config/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
 
-const COMPANY_ACCOUNT = { role: "SUPER_ADMIN", accountType: "HEADQUARTER" };
+const { roleIdFor } = require("../helper/Role_Access");
+const { SUPER_ADMIN_KEY } = require("../helper/Permissions");
+
+const COMPANY_ACCOUNT_TYPE = "HEADQUARTER";
+
+async function companyAccount() {
+  return { roleId: await roleIdFor(SUPER_ADMIN_KEY), accountType: COMPANY_ACCOUNT_TYPE };
+}
 const companyOnly = { parentId: null, ...branch.withoutDeveloper };
 
 class Company {
@@ -62,7 +69,7 @@ class Company {
           users: {
             create: {
               ...(await branch.accountData(req.body.user)),
-              ...COMPANY_ACCOUNT,
+              ...(await companyAccount()),
             },
           },
         },
@@ -89,7 +96,7 @@ class Company {
         });
 
         if (req.body.user) {
-          await branch.saveAccount(tx, req.params.id, req.body.user, COMPANY_ACCOUNT);
+          await branch.saveAccount(tx, req.params.id, req.body.user, await companyAccount());
         }
 
         return tx.company.findUnique({

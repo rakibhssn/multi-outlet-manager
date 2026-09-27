@@ -7,6 +7,10 @@ const SEARCH_FIELDS = ["name", "description"];
 
 const menuInclude = { _count: { select: { menuItems: true } } };
 
+const outletMenuInclude = (branchId) => ({
+  _count: { select: { menuItems: { where: { itemOutlets: { some: { branchId } } } } } },
+});
+
 
 function pickData(body) {
   return {
@@ -44,10 +48,11 @@ class Menu {
   async list(req, res) {
     try {
       const list = branch.listParams(req.query, { sortable: ["name", "status", "createdAt"] });
+      const outletId = (await branch.viewerOutlet(req.user)) ?? req.query.outletId;
       const where = {
         ...(req.query.status ? { status: req.query.status } : {}),
-        ...(req.query.outletId
-          ? { menuItems: { some: { itemOutlets: { some: { branchId: req.query.outletId } } } } }
+        ...(outletId
+          ? { menuItems: { some: { itemOutlets: { some: { branchId: outletId } } } } }
           : {}),
         ...branch.searchWhere(list.search, SEARCH_FIELDS),
       };
@@ -55,7 +60,7 @@ class Menu {
       const [menus, total] = await prisma.$transaction([
         prisma.menu.findMany({
           where,
-          include: menuInclude,
+          include: outletId ? outletMenuInclude(outletId) : menuInclude,
           orderBy: list.orderBy,
           skip: list.skip,
           take: list.take,

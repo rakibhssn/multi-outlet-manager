@@ -11,6 +11,8 @@ export default function useScope() {
       companyName: user.company?.name,
       outletId: null,
       outletName: null,
+      accountType,
+      userId: user?.id,
     };
   }
 
@@ -20,8 +22,17 @@ export default function useScope() {
       companyName: user.company?.parent?.name ?? null,
       outletId: user.branchId,
       outletName: user.company?.name,
+      accountType,
+      userId: user?.id,
     };
   }
 
-  return { companyId: null, companyName: null, outletId: null, outletName: null };
+  return {
+    companyId: null,
+    companyName: null,
+    outletId: null,
+    outletName: null,
+    accountType: null,
+    userId: null,
+  };
 }

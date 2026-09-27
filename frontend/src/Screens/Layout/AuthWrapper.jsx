@@ -8,9 +8,11 @@ import Sidebar from "./Sidebar";
 import Breadcrumbs from "./Breadcrumbs";
 import { SidebarMobileTrigger, SidebarProvider } from "@/components/ui/sidebar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import useAccessSync from "@/hooks/useAccessSync";
 
 export default function AuthWrapper() {
   const [confirmation, setConfirmation] = useAtom(confirmModal);
+  useAccessSync();
 
   return (
     <>

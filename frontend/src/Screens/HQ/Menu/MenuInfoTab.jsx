@@ -8,7 +8,11 @@ export default function MenuInfoTab({ menu }) {
   return (
     <div className="menu-info">
       <div className="menu-info-image">
-        {menu?.menuImage ? <img src={menu.menuImage} alt={menu.name} /> : <LuImage />}
+        {menu?.menuImage ? (
+          <img src={menu.menuImage} alt={menu.name} />
+        ) : (
+          <LuImage />
+        )}
       </div>
       <div className="detail-grid menu-info-grid">
         <DetailCard
@@ -18,18 +22,25 @@ export default function MenuInfoTab({ menu }) {
             { label: "Status", value: <StatusComp type={menu?.status} /> },
             {
               label: "Created",
-              value: menu?.createdAt ? format(new Date(menu.createdAt), "dd MMM yyyy") : null,
+              value: menu?.createdAt
+                ? format(new Date(menu.createdAt), "dd MMM yyyy")
+                : null,
             },
           ]}
         />
         <DetailCard
           title="Summary"
           items={[
-            { label: "Menu Items", value: String(menu?._count?.menuItems ?? 0) },
+            {
+              label: "Menu Items",
+              value: String(menu?._count?.menuItems ?? 0),
+            },
             { label: "Sold At Outlets", value: String(menu?.outletCount ?? 0) },
             {
               label: "Last Updated",
-              value: menu?.updatedAt ? format(new Date(menu.updatedAt), "dd MMM yyyy") : null,
+              value: menu?.updatedAt
+                ? format(new Date(menu.updatedAt), "dd MMM yyyy")
+                : null,
             },
           ]}
         />

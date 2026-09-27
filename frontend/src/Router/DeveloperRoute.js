@@ -5,7 +5,11 @@ import { userData } from "@/lib/Variables";
 import { homeFor, isDeveloper } from "@/lib/Menus";
 
 export default function DeveloperRoute() {
-  const { user } = useAtomValue(userData);
+  const { user, access } = useAtomValue(userData);
 
-  return isDeveloper(user) ? <Outlet /> : <Navigate to={homeFor(user)} replace />;
+  return isDeveloper(user) ? (
+    <Outlet />
+  ) : (
+    <Navigate to={homeFor(user, access)} replace />
+  );
 }

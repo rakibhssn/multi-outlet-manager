@@ -39,5 +39,13 @@ export default function useForm(initialValues = {}, validate) {
     setErrors({});
   };
 
-  return { values, errors, setValue, setErrors, bind, validate: runValidation, reset };
+  return {
+    values,
+    errors,
+    setValue,
+    setErrors,
+    bind,
+    validate: runValidation,
+    reset,
+  };
 }

@@ -1,23 +1,18 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useAtom } from "jotai";
 import { ActionComp, CustomTable, StatusComp } from "@/components/custom";
 import { PageHeader } from "@/Screens/Layout/DashboardBlocks";
+import { ThumbCell } from "@/Screens/Layout/TableCells";
+import useCan from "@/hooks/useCan";
+import useConfirm from "@/hooks/useConfirm";
+import useMenuOption from "@/hooks/useMenuOption";
+import useNotify from "@/hooks/useNotify";
+import useRemoteOptions from "@/hooks/useRemoteOptions";
+import useTableList from "@/hooks/useTableList";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
-import { formatMoney } from "@/lib/Functions/Common";
+import { formatMoney, nameOption } from "@/lib/Functions/Common";
 import { MenuItemColumn } from "@/lib/TableData/Columns";
-import {
-  confirmModal,
-  emptyNotifyData,
-  notificationModal,
-} from "@/lib/Variables";
 import MenuItemEntry from "./MenuItemEntry";
 import MenuItemOutlets from "./MenuItemOutlets";
 
@@ -28,138 +23,74 @@ const DEFAULT_PARAMS = {
   order_by: "desc",
 };
 
-const SEARCH_DEBOUNCE = 400;
+function PriceCell({ latest }) {
+  if (!latest) return "—";
+  const discounted = Number(latest.price) < Number(latest.basePrice);
+  return (
+    <div className="price-cell">
+      <span className="cell-title">{formatMoney(latest.price)}</span>
+      {discounted && (
+        <span className="price-base">{formatMoney(latest.basePrice)}</span>
+      )}
+    </div>
+  );
+}
 
-export default function MenuItemList({ menuId: fixedMenuId, onChange }) {
+export default function MenuItemList({
+  menuId: fixedMenuId,
+  menuName,
+  onChange,
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const notify = useNotify();
+  const confirm = useConfirm();
+  const can = useCan();
+  const canCreate = can("items.create");
+  const canEdit = can("items.edit");
+  const canDelete = can("items.delete");
   const embedded = !!fixedMenuId;
   const initialMenuId = fixedMenuId ?? searchParams.get("menuId") ?? "";
-  const [, setConfirmation] = useAtom(confirmModal);
-  const [, setNotification] = useAtom(notificationModal);
-  const [params, setParams] = useState({
-    ...DEFAULT_PARAMS,
-    menuId: initialMenuId || undefined,
+  const { rows, offset, reload, params, ...table } = useTableList({
+    url: API_LINK.MenuItem,
+    defaults: DEFAULT_PARAMS,
+    initialParams: { menuId: initialMenuId || undefined },
+    filterParam: (filter) => ({ menuId: fixedMenuId || filter }),
+    onFilter: (menuId) => {
+      if (!fixedMenuId)
+        setSearchParams(menuId ? { menuId } : {}, { replace: true });
+    },
+    errorText: "Failed to load menu items",
   });
-  const [data, setData] = useState({ data: [], total: 0 });
-  const [menuOptions, setMenuOptions] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [item, setItem] = useState(null);
   const [outletItem, setOutletItem] = useState(null);
+  const urlMenu = useMenuOption(embedded ? null : initialMenuId);
 
-  const fetchItems = useCallback(() => {
-    setLoading(true);
+  const menuFilter = useRemoteOptions({
+    url: API_LINK.Menu,
+    mapOption: nameOption,
+    selected: urlMenu,
+    enabled: !embedded,
+    errorText: "Failed to load menus",
+  });
 
-    ApiService.get(API_LINK.MenuItem, { params })
-      .then((res) => {
-        if (res.status === "success") {
-          setData({ data: res?.data ?? [], total: res?.total ?? 0 });
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-            type: "error",
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description:
-            error?.response?.data?.message ?? "Failed to load menu items",
-          type: "error",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [params, setNotification]);
-
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
-
-  useEffect(() => {
-    ApiService.get(API_LINK.Menu, {
-      params: { per_page: 100, sort_by: "name", order_by: "asc" },
-    })
-      .then((res) => {
-        if (res.status === "success") {
-          setMenuOptions(
-            (res?.data ?? []).map((menu) => ({
-              label: menu.name,
-              value: menu.id,
-            })),
-          );
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-            type: "error",
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load menus",
-          type: "error",
-        });
-      });
-  }, [setNotification]);
-
-  const removeItem = useCallback(
-    (row) => {
-      ApiService.delete(API_LINK.MenuItemDetails(row.id))
-        .then((res) => {
-          setNotification({
-            open: true,
-            title: res.status === "success" ? "Success" : "Error",
-            description: res?.message,
-            type: res.status === "success" ? "success" : "error",
-          });
-          if (res.status === "success") {
-            fetchItems();
-            onChange?.();
-            setConfirmation(emptyNotifyData);
-          }
-        })
-        .catch((error) => {
-          setNotification({
-            open: true,
-            title: "Error",
-            description:
-              error?.response?.data?.message ?? "Failed to delete menu item",
-            type: "error",
-          });
-        });
-    },
-    [fetchItems, onChange, setConfirmation, setNotification],
+  const lockedMenu = useMemo(
+    () =>
+      embedded
+        ? { value: fixedMenuId, label: menuName ?? "This menu" }
+        : menuFilter.options.find((option) => option.value === params.menuId),
+    [embedded, fixedMenuId, menuName, menuFilter.options, params.menuId],
   );
 
-  const handleDelete = useCallback(
-    (row) => {
-      const confirmationPayload = {
-        open: true,
-        title: "Remove Menu Item",
-        description: "",
-        body: `Are you sure to remove "${row.name}" and its price history?`,
-        type: "success",
-        footer: true,
-        cancelButton: true,
-        remove: true,
-        submitLabel: "Delete",
-        submitClick: () => removeItem(row),
-      };
+  const refresh = useCallback(() => {
+    reload();
+    onChange?.();
+  }, [reload, onChange]);
 
-      setConfirmation(confirmationPayload);
-    },
-    [removeItem, setConfirmation],
-  );
+  const openEntry = (row) => {
+    setItem(row);
+    setOpenModal(true);
+  };
 
   const columns = useMemo(
     () => MenuItemColumn.filter((column) => column.key !== "menu" || !embedded),
@@ -167,125 +98,50 @@ export default function MenuItemList({ menuId: fixedMenuId, onChange }) {
   );
 
   const items = useMemo(() => {
-    if (!data.data || data.data.length === 0) return [];
+    const removeItem = (row) =>
+      confirm.remove({
+        title: "Remove Menu Item",
+        body: `Are you sure to remove "${row.name}" and its price history?`,
+        onConfirm: () =>
+          notify.submit(ApiService.delete(API_LINK.MenuItemDetails(row.id)), {
+            errorText: "Failed to delete menu item",
+            onSuccess: () => {
+              refresh();
+              confirm.close();
+            },
+          }),
+      });
 
-    const offset = (params.page - 1) * params.per_page;
-
-    return data.data.map((row, index) => {
-      const latest = row.menuItemPrices?.[0];
-      const discounted =
-        latest && Number(latest.price) < Number(latest.basePrice);
-
-      return {
-        key: row.id,
-        id: 1 + index + offset,
-        name: (
-          <div className="menu-cell">
-            {row.menuItemImage ? (
-              <img
-                src={row.menuItemImage}
-                alt={row.name}
-                className="menu-thumb"
-              />
-            ) : (
-              <span className="menu-thumb menu-thumb-empty">
-                {row.name?.charAt(0)}
-              </span>
-            )}
-            <div className="cell-stack">
-              <span className="cell-title">{row.name}</span>
-              {row.description && (
-                <span className="cell-sub">{row.description}</span>
-              )}
-            </div>
-          </div>
-        ),
-        menu: row.menu?.name,
-        price: latest ? (
-          <div className="price-cell">
-            <span className="cell-title">{formatMoney(latest.price)}</span>
-            {discounted && (
-              <span className="price-base">
-                {formatMoney(latest.basePrice)}
-              </span>
-            )}
-          </div>
-        ) : (
-          "—"
-        ),
-        outlets: row._count?.itemOutlets ?? 0,
-        status: <StatusComp type={row.status} />,
-        action: (
-          <ActionComp
-            className="justify-end"
-            view={true}
-            viewTitle="Outlets Stock & prices"
-            viewAction={() => setOutletItem(row)}
-            edit={true}
-            editTitle="Edit"
-            editAction={() => {
-              setItem(row);
-              setOpenModal(true);
-            }}
-            remove={true}
-            deleteTitle="Delete"
-            deleteAction={() => handleDelete(row)}
-          />
-        ),
-      };
-    });
-  }, [data, params.page, params.per_page, handleDelete]);
-
-  const handleChanges = useCallback(
-    ({ page, pageSize, sortField, sort, filter }) => {
-      const menuId = fixedMenuId || filter || undefined;
-      setParams((prev) => ({
-        ...prev,
-        page,
-        per_page: pageSize,
-        sort_by: sortField ?? DEFAULT_PARAMS.sort_by,
-        order_by: sort?.direction ?? DEFAULT_PARAMS.order_by,
-        menuId,
-      }));
-      if (!fixedMenuId)
-        setSearchParams(menuId ? { menuId } : {}, { replace: true });
-    },
-    [fixedMenuId, setSearchParams],
-  );
-
-  const handleSearch = useCallback((value) => {
-    const search = value.trim();
-    setParams((prev) => ({
-      ...prev,
-      page: 1,
-      search_by: search || undefined,
+    return rows.map((row, index) => ({
+      key: row.id,
+      id: 1 + index + offset,
+      name: (
+        <ThumbCell
+          image={row.menuItemImage}
+          title={row.name}
+          subtitle={row.description}
+        />
+      ),
+      menu: row.menu?.name,
+      price: <PriceCell latest={row.menuItemPrices?.[0]} />,
+      outlets: row._count?.itemOutlets ?? 0,
+      status: <StatusComp type={row.status} />,
+      action: (
+        <ActionComp
+          className="justify-end"
+          view={true}
+          viewTitle="Outlets Stock & prices"
+          viewAction={() => setOutletItem(row)}
+          edit={canEdit}
+          editTitle="Edit"
+          editAction={() => openEntry(row)}
+          remove={canDelete}
+          deleteTitle="Delete"
+          deleteAction={() => removeItem(row)}
+        />
+      ),
     }));
-  }, []);
-
-  const searchTimer = useRef(null);
-
-  const debouncedSearch = useCallback(
-    (value) => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-      searchTimer.current = setTimeout(
-        () => handleSearch(value),
-        SEARCH_DEBOUNCE,
-      );
-    },
-    [handleSearch],
-  );
-
-  useEffect(
-    () => () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-    },
-    [],
-  );
-
-  function handleAddItem() {
-    setItem(null);
-    setOpenModal(true);
-  }
+  }, [rows, offset, refresh, canEdit, canDelete, notify, confirm]);
 
   return (
     <div className={embedded ? "page-section" : "page"}>
@@ -302,17 +158,19 @@ export default function MenuItemList({ menuId: fixedMenuId, onChange }) {
         columns={columns}
         dataSource={items}
         rowKey="key"
-        loading={loading}
-        total={data.total}
+        loading={table.loading}
+        total={table.total}
         pageSize={params.per_page}
-        onChange={handleChanges}
-        onSearch={debouncedSearch}
-        filterOptions={embedded ? undefined : menuOptions}
+        onChange={table.onChange}
+        onSearch={table.onSearch}
+        filterOptions={embedded ? undefined : menuFilter.options}
+        onFilterSearch={menuFilter.onSearch}
+        filterLoading={menuFilter.loading}
         filterPlaceholder="All menus"
         defaultFilter={embedded ? "all" : initialMenuId || "all"}
         addLabel="Add Item"
-        onAdd={handleAddItem}
-        reloadAction={fetchItems}
+        onAdd={canCreate ? () => openEntry(null) : undefined}
+        reloadAction={reload}
         showReload={true}
         searchPlaceholder="Search items..."
         emptyText="No menu item has been added yet"
@@ -322,13 +180,12 @@ export default function MenuItemList({ menuId: fixedMenuId, onChange }) {
         open={openModal}
         item={item}
         menuId={params.menuId}
-        menuOptions={menuOptions}
+        lockedMenu={lockedMenu}
         lockMenu={embedded}
         onClose={() => setOpenModal(false)}
         onSaved={() => {
           setOpenModal(false);
-          fetchItems();
-          onChange?.();
+          refresh();
         }}
       />
 
@@ -337,7 +194,7 @@ export default function MenuItemList({ menuId: fixedMenuId, onChange }) {
         item={outletItem}
         onClose={() => {
           setOutletItem(null);
-          fetchItems();
+          reload();
         }}
         onChange={onChange}
       />

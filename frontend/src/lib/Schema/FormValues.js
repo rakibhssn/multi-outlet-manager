@@ -22,6 +22,7 @@ export const CompanyValues = {
 export const OutletValues = {
   ...CompanyValues,
   companyId: "",
+  userRoleId: "",
 };
 
 export const StaffValues = {
@@ -46,6 +47,7 @@ export const StaffValues = {
   country: "",
   status: "ACTIVE",
   userEmail: "",
+  userRoleId: "",
   userPassword: "",
   userConfirmPassword: "",
 };
@@ -76,4 +78,10 @@ export const MenuItemValues = {
 export const OutletPriceValues = {
   price: "",
   stock: "0",
+};
+
+export const PasswordChangeValues = {
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: "",
 };

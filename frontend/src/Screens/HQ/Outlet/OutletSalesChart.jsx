@@ -36,7 +36,13 @@ export default function OutletSalesChart({ data = [], sample = false }) {
 
   const total = days.reduce((sum, row) => sum + row.amount, 0);
   const max = niceMax(Math.max(0, ...days.map((row) => row.amount)));
-  const peakIndex = total > 0 ? days.reduce((best, row, i) => (row.amount > days[best].amount ? i : best), 0) : -1;
+  const peakIndex =
+    total > 0
+      ? days.reduce(
+          (best, row, i) => (row.amount > days[best].amount ? i : best),
+          0,
+        )
+      : -1;
   const ticks = max ? [max, max / 2, 0] : [];
   const hovered = active !== null ? days[active] : null;
 
@@ -60,7 +66,11 @@ export default function OutletSalesChart({ data = [], sample = false }) {
         {total > 0 && (
           <div className="sales-grid" aria-hidden="true">
             {ticks.map((tick) => (
-              <div key={tick} className="sales-grid-line" style={{ bottom: `${(tick / max) * 100}%` }}>
+              <div
+                key={tick}
+                className="sales-grid-line"
+                style={{ bottom: `${(tick / max) * 100}%` }}
+              >
                 <span className="sales-grid-label">{shortMoney(tick)}</span>
               </div>
             ))}
@@ -69,7 +79,9 @@ export default function OutletSalesChart({ data = [], sample = false }) {
 
         <div className={cn("sales-bars", total > 0 && "sales-bars-axis")}>
           {days.map((row, index) => {
-            const height = max ? Math.max((row.amount / max) * 100, row.amount > 0 ? 3 : 0) : 0;
+            const height = max
+              ? Math.max((row.amount / max) * 100, row.amount > 0 ? 3 : 0)
+              : 0;
             return (
               <button
                 key={row.date}
@@ -83,16 +95,30 @@ export default function OutletSalesChart({ data = [], sample = false }) {
               >
                 <span className="sales-bar-track">
                   {index === peakIndex && (
-                    <span className="sales-bar-peak" style={{ bottom: `${height}%` }}>
+                    <span
+                      className="sales-bar-peak"
+                      style={{ bottom: `${height}%` }}
+                    >
                       {shortMoney(row.amount)}
                     </span>
                   )}
                   <span
-                    className={cn("sales-bar", active === index && "sales-bar-active", row.amount <= 0 && "sales-bar-empty")}
-                    style={{ height: row.amount > 0 ? `${height}%` : undefined }}
+                    className={cn(
+                      "sales-bar",
+                      active === index && "sales-bar-active",
+                      row.amount <= 0 && "sales-bar-empty",
+                    )}
+                    style={{
+                      height: row.amount > 0 ? `${height}%` : undefined,
+                    }}
                   />
                 </span>
-                <span className={cn("sales-bar-day", active === index && "sales-bar-day-active")}>
+                <span
+                  className={cn(
+                    "sales-bar-day",
+                    active === index && "sales-bar-day-active",
+                  )}
+                >
                   {row.day}
                 </span>
               </button>
@@ -106,7 +132,9 @@ export default function OutletSalesChart({ data = [], sample = false }) {
             role="status"
             style={{ left: `${((active + 0.5) / days.length) * 100}%` }}
           >
-            <span className="sales-tooltip-value">{formatMoney(hovered.amount)}</span>
+            <span className="sales-tooltip-value">
+              {formatMoney(hovered.amount)}
+            </span>
             <span className="sales-tooltip-label">
               {hovered.full}
               {sample ? " · sample" : ""}
@@ -121,7 +149,8 @@ export default function OutletSalesChart({ data = [], sample = false }) {
 
       <table className="sr-only">
         <caption>
-          {sample ? "Sample daily sales" : "Daily sales"} for the last {days.length} days
+          {sample ? "Sample daily sales" : "Daily sales"} for the last{" "}
+          {days.length} days
         </caption>
         <thead>
           <tr>

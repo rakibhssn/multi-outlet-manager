@@ -2,7 +2,13 @@ const prisma = require("../config/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
 
-const OUTLET_ACCOUNT = { role: "ADMIN", accountType: "OUTLET" };
+const { detachForeignRoles, resolveAccountRole } = require("../helper/Role_Access");
+
+const OUTLET_ACCOUNT_TYPE = "OUTLET";
+
+async function outletAccount(user, companyId) {
+  return { roleId: await resolveAccountRole(user?.roleId, OUTLET_ACCOUNT_TYPE, companyId), accountType: OUTLET_ACCOUNT_TYPE };
+}
 const outletOnly = { parentId: { not: null } };
 
 const outletInclude = {
@@ -57,6 +63,9 @@ class Outlet {
         ...outletOnly,
         ...(req.query.companyId ? { parentId: req.query.companyId } : {}),
         ...(req.query.status ? { status: req.query.status } : {}),
+        ...(req.query.excludeMenuItemId
+          ? { menuItemOutlets: { none: { menuItemId: req.query.excludeMenuItemId } } }
+          : {}),
         ...branch.searchWhere(list.search),
       };
 
@@ -131,7 +140,7 @@ class Outlet {
           users: {
             create: {
               ...(await branch.accountData(req.body.user)),
-              ...OUTLET_ACCOUNT,
+              ...(await outletAccount(req.body.user, req.body.companyId)),
             },
           },
         },
@@ -166,8 +175,11 @@ class Outlet {
           data: { ...branch.pickData(req.body), parentId: req.body.companyId },
         });
 
+        await detachForeignRoles(tx, { branchId: req.params.id, accountType: OUTLET_ACCOUNT_TYPE }, req.body.companyId, OUTLET_ACCOUNT_TYPE);
+        await detachForeignRoles(tx, { branchId: req.params.id, accountType: "OUTLET_STAFF" }, req.body.companyId, "OUTLET_STAFF");
+
         if (req.body.user) {
-          await branch.saveAccount(tx, req.params.id, req.body.user, OUTLET_ACCOUNT);
+          await branch.saveAccount(tx, req.params.id, req.body.user, await outletAccount(req.body.user, req.body.companyId));
         }
 
         return tx.company.findUnique({

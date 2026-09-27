@@ -20,9 +20,9 @@ const humanize = (value) =>
 
 export default function Breadcrumbs() {
   const { pathname } = useLocation();
-  const { user } = useAtomValue(userData);
+  const { user, access } = useAtomValue(userData);
   const labels = useAtomValue(breadcrumbLabels);
-  const menus = flatMenus(menusFor(user));
+  const menus = flatMenus(menusFor(user, access));
 
   const segments = pathname.split("/").filter(Boolean);
   const trail = segments.slice(1).map((segment, index) => {
@@ -39,7 +39,9 @@ export default function Breadcrumbs() {
     <Breadcrumb className="layout-breadcrumb">
       <BreadcrumbList>
         <BreadcrumbItem>
-          <BreadcrumbLink render={<Link to={homeFor(user)} aria-label="Home" />}>
+          <BreadcrumbLink
+            render={<Link to={homeFor(user, access)} aria-label="Home" />}
+          >
             <LuHouse className="size-4" />
           </BreadcrumbLink>
         </BreadcrumbItem>
@@ -48,9 +50,13 @@ export default function Breadcrumbs() {
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               {crumb.isCurrent ? (
-                <BreadcrumbPage className="font-medium">{crumb.label}</BreadcrumbPage>
+                <BreadcrumbPage className="font-medium">
+                  {crumb.label}
+                </BreadcrumbPage>
               ) : (
-                <BreadcrumbLink render={<Link to={crumb.href} />}>{crumb.label}</BreadcrumbLink>
+                <BreadcrumbLink render={<Link to={crumb.href} />}>
+                  {crumb.label}
+                </BreadcrumbLink>
               )}
             </BreadcrumbItem>
           </Fragment>

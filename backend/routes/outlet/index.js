@@ -1,13 +1,14 @@
 const express = require("express");
 const outlet = require("../../controller/Outlet");
+const { requireAny, requirePermission } = require("../../helper/Auth_Middleware");
 const router = express.Router();
 
-router.get("/", outlet.list);
-router.get("/:id", outlet.details);
-router.post("/", outlet.create);
-router.put("/:id", outlet.update);
-router.patch("/:id/status", outlet.changeStatus);
-router.post("/:id/items", outlet.assignItems);
-router.delete("/:id", outlet.remove);
+router.get("/", requireAny("outlets.view", "staff.view", "reports.view", "outlets.stock", "orders.view"), outlet.list);
+router.get("/:id", requirePermission("outlets.view"), outlet.details);
+router.post("/", requirePermission("outlets.create"), outlet.create);
+router.put("/:id", requirePermission("outlets.edit"), outlet.update);
+router.patch("/:id/status", requirePermission("outlets.edit"), outlet.changeStatus);
+router.post("/:id/items", requirePermission("outlets.stock"), outlet.assignItems);
+router.delete("/:id", requirePermission("outlets.delete"), outlet.remove);
 
 module.exports = router;

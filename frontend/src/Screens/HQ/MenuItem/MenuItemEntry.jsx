@@ -1,19 +1,22 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useFormik } from "formik";
-import { useSetAtom } from "jotai";
 import {
+  AutoCompleteField,
   CustomDialog,
   CustomImageField,
   CustomSelectField,
   CustomTextarea,
   InputField,
 } from "@/components/custom";
+import useNotify from "@/hooks/useNotify";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { ITEM_STATUS_OPTIONS } from "@/lib/Constant";
+import { nameOption } from "@/lib/Functions/Common";
+import useRemoteOptions from "@/hooks/useRemoteOptions";
 import { MenuItemValues } from "@/lib/Schema/FormValues";
 import { MenuItemValidation } from "@/lib/Schema/FormValidation";
-import { notificationModal } from "@/lib/Variables";
+import { inputProps, selectProps } from "@/lib/Functions/FormField";
 
 function toFormValues(item, menuId) {
   if (!item) return { ...MenuItemValues, menuId: menuId ?? "" };
@@ -33,49 +36,41 @@ export default function MenuItemEntry({
   open,
   item,
   menuId,
-  menuOptions = [],
+  lockedMenu,
   lockMenu = false,
   onClose,
   onSaved,
 }) {
-  const setNotification = useSetAtom(notificationModal);
+  const notify = useNotify();
   const [loading, setLoading] = useState(false);
   const isEdit = !!item?.id;
+  const selectedMenu = useMemo(
+    () => (isEdit ? nameOption(item?.menu) : (lockedMenu ?? null)),
+    [isEdit, item?.menu, lockedMenu],
+  );
+  const menus = useRemoteOptions({
+    url: API_LINK.Menu,
+    mapOption: nameOption,
+    selected: selectedMenu,
+    enabled: open && !lockMenu,
+    errorText: "Failed to load menus",
+  });
 
   function handleSubmit(values) {
     setLoading(true);
-
-    (isEdit
+    const request = isEdit
       ? ApiService.put(API_LINK.MenuItemDetails(item.id), values)
-      : ApiService.post(API_LINK.MenuItem, values)
-    )
-      .then((res) => {
-        if (res.status === "success") {
-          setNotification({
-            open: true,
-            title: "Success",
-            description: res?.message,
-          });
+      : ApiService.post(API_LINK.MenuItem, values);
+
+    notify
+      .submit(request, {
+        errorText: "Failed to save menu item",
+        onSuccess: (res) => {
           onSaved?.(res?.data);
           formik.resetForm();
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
+        },
       })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to save menu item",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }
 
   const formik = useFormik({
@@ -104,29 +99,24 @@ export default function MenuItemEntry({
     >
       <form onSubmit={formik.handleSubmit} noValidate className="form-grid">
         <p className="form-section">Item</p>
-        <CustomSelectField
+        <AutoCompleteField
           label="Menu"
-          placeholder="Select menu"
-          options={menuOptions}
+          placeholder="Search menu"
+          options={menus.options}
+          onSearch={menus.onSearch}
+          loading={menus.loading}
+          filterLocally={false}
           disabled={lockMenu}
           required
           className="form-span-2"
-          value={formik.values.menuId}
-          onValueChange={formik.handleChange("menuId")}
-          onBlur={formik.handleBlur("menuId")}
-          showError={!!(formik.touched.menuId && formik.errors.menuId)}
-          error={formik.errors.menuId}
+          {...selectProps(formik, "menuId")}
         />
         <InputField
           label="Item Name"
           placeholder="Beef Tehari"
           required
           className="form-span-2"
-          value={formik.values.name}
-          onChange={formik.handleChange("name")}
-          onBlur={formik.handleBlur("name")}
-          showError={!!(formik.touched.name && formik.errors.name)}
-          error={formik.errors.name}
+          {...inputProps(formik, "name")}
         />
         <CustomTextarea
           label="Description"
@@ -134,21 +124,13 @@ export default function MenuItemEntry({
           rows={3}
           maxLength={300}
           className="form-span-2"
-          value={formik.values.description}
-          onChange={formik.handleChange("description")}
-          onBlur={formik.handleBlur("description")}
-          showError={!!(formik.touched.description && formik.errors.description)}
-          error={formik.errors.description}
+          {...inputProps(formik, "description")}
         />
         <CustomImageField
           label="Image"
           folder="menu-item"
           className="form-span-2"
-          value={formik.values.menuItemImage}
-          onChange={formik.handleChange("menuItemImage")}
-          onBlur={formik.handleBlur("menuItemImage")}
-          showError={!!(formik.touched.menuItemImage && formik.errors.menuItemImage)}
-          error={formik.errors.menuItemImage}
+          {...inputProps(formik, "menuItemImage")}
         />
 
         <p className="form-section">Price & Availability</p>
@@ -159,11 +141,7 @@ export default function MenuItemEntry({
           required
           min="0"
           step="0.01"
-          value={formik.values.basePrice}
-          onChange={formik.handleChange("basePrice")}
-          onBlur={formik.handleBlur("basePrice")}
-          showError={!!(formik.touched.basePrice && formik.errors.basePrice)}
-          error={formik.errors.basePrice}
+          {...inputProps(formik, "basePrice")}
         />
         <InputField
           label="Selling Price"
@@ -172,22 +150,14 @@ export default function MenuItemEntry({
           min="0"
           step="0.01"
           hint="Leave empty to sell at the base price"
-          value={formik.values.price}
-          onChange={formik.handleChange("price")}
-          onBlur={formik.handleBlur("price")}
-          showError={!!(formik.touched.price && formik.errors.price)}
-          error={formik.errors.price}
+          {...inputProps(formik, "price")}
         />
         <CustomSelectField
           label="Status"
           placeholder="Select status"
           options={ITEM_STATUS_OPTIONS}
           required
-          value={formik.values.status}
-          onValueChange={formik.handleChange("status")}
-          onBlur={formik.handleBlur("status")}
-          showError={!!(formik.touched.status && formik.errors.status)}
-          error={formik.errors.status}
+          {...selectProps(formik, "status")}
         />
       </form>
     </CustomDialog>

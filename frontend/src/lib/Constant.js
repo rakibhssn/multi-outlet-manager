@@ -1,5 +1,6 @@
+import { humanize } from "./Functions/Common";
+
 const API_URL = "http://localhost:3050/api/v1/";
-const AUTH_SECRET = "273b7b68-1241-4122-a02e-5e2f0be59861";
 
 const STATUS_OPTIONS = [
   { label: "Active", value: "ACTIVE" },
@@ -7,13 +8,7 @@ const STATUS_OPTIONS = [
 ];
 
 const toOptions = (values) =>
-  values.map((value) => ({
-    value,
-    label: value
-      .toLowerCase()
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase()),
-  }));
+  values.map((value) => ({ value, label: humanize(value) }));
 
 const DESIGNATION_OPTIONS = toOptions([
   "GENERAL_MANAGER",
@@ -49,13 +44,21 @@ const ITEM_STATUS_OPTIONS = toOptions([
   "DISCONTINUED",
 ]);
 
+const ORDER_TYPE_OPTIONS = toOptions(["DINE_IN", "TAKEAWAY", "DELIVERY"]);
+
+const SHIFT_STATUS_OPTIONS = toOptions(["ON_SHIFT", "COMPLETED"]);
+
+const ORDER_STATUS_OPTIONS = toOptions(["CONFIRMED", "COMPLETED", "CANCELLED"]);
+
 export {
   API_URL,
-  AUTH_SECRET,
   STATUS_OPTIONS,
   DESIGNATION_OPTIONS,
   EMPLOYMENT_TYPE_OPTIONS,
   SALARY_TYPE_OPTIONS,
   GENDER_OPTIONS,
   ITEM_STATUS_OPTIONS,
+  ORDER_TYPE_OPTIONS,
+  ORDER_STATUS_OPTIONS,
+  SHIFT_STATUS_OPTIONS,
 };

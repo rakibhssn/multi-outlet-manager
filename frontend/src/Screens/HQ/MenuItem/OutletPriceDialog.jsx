@@ -1,48 +1,53 @@
 import React, { useState } from "react";
 import { useFormik } from "formik";
-import { useAtom } from "jotai";
 import { CustomDialog, InputField } from "@/components/custom";
+import useNotify from "@/hooks/useNotify";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { formatMoney, toPriceInput } from "@/lib/Functions/Common";
 import { OutletPriceValues } from "@/lib/Schema/FormValues";
 import { OutletPriceValidation } from "@/lib/Schema/FormValidation";
-import { notificationModal } from "@/lib/Variables";
+import { inputProps } from "@/lib/Functions/FormField";
 
-export default function OutletPriceDialog({ open, assignment, onClose, onSaved }) {
-  const [, setNotification] = useAtom(notificationModal);
+export const outletAssignment = (row, outlet) => ({
+  menuItemId: row.id,
+  outletId: outlet.id,
+  itemName: row.name,
+  outletName: outlet.name,
+  price: row.outletPrice,
+  stock: row.stock,
+  defaultPrice: row.defaultPrice,
+});
+
+export default function OutletPriceDialog({
+  open,
+  assignment,
+  onClose,
+  onSaved,
+}) {
+  const notify = useNotify();
   const [loading, setLoading] = useState(false);
 
   function handleSubmit(values) {
     setLoading(true);
+    const { menuItemId, outletId } = assignment;
+    const request = ApiService.put(
+      API_LINK.MenuItemOutlet(menuItemId, outletId),
+      {
+        price: values.price,
+        stock: values.stock,
+      },
+    );
 
-    ApiService.put(API_LINK.MenuItemOutlet(assignment.menuItemId, assignment.outletId), {
-      price: values.price,
-      stock: values.stock,
-    })
-      .then((res) => {
-        setNotification({
-          open: true,
-          title: res.status === "success" ? "Success" : "Error",
-          description: res?.message,
-          type: res.status === "success" ? "success" : "error",
-        });
-        if (res.status === "success") {
+    notify
+      .submit(request, {
+        errorText: "Failed to update price and stock",
+        onSuccess: () => {
           formik.resetForm();
           onSaved?.();
-        }
+        },
       })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to update price and stock",
-          type: "error",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }
 
   const formik = useFormik({
@@ -79,11 +84,7 @@ export default function OutletPriceDialog({ open, assignment, onClose, onSaved }
           step="0.01"
           placeholder={formatMoney(assignment?.defaultPrice)}
           hint={`Leave empty to use the default price (${formatMoney(assignment?.defaultPrice)})`}
-          value={formik.values.price}
-          onChange={formik.handleChange("price")}
-          onBlur={formik.handleBlur("price")}
-          showError={!!(formik.touched.price && formik.errors.price)}
-          error={formik.errors.price}
+          {...inputProps(formik, "price")}
           className="form-span-2"
         />
         <InputField
@@ -93,11 +94,7 @@ export default function OutletPriceDialog({ open, assignment, onClose, onSaved }
           step="1"
           required
           hint="0 means the item is stocked out at this outlet"
-          value={formik.values.stock}
-          onChange={formik.handleChange("stock")}
-          onBlur={formik.handleBlur("stock")}
-          showError={!!(formik.touched.stock && formik.errors.stock)}
-          error={formik.errors.stock}
+          {...inputProps(formik, "stock")}
           className="form-span-2"
         />
       </form>

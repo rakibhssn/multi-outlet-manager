@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useFormik } from "formik";
-import { useSetAtom } from "jotai";
 import {
   CustomDialog,
   CustomSwitch,
   CustomTextarea,
   InputField,
 } from "@/components/custom";
+import useNotify from "@/hooks/useNotify";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { CompanyValues } from "@/lib/Schema/FormValues";
@@ -14,7 +14,7 @@ import {
   CompanyUpdateValidation,
   CompanyValidation,
 } from "@/lib/Schema/FormValidation";
-import { notificationModal } from "@/lib/Variables";
+import { inputProps } from "@/lib/Functions/FormField";
 
 const ACCOUNT_FIELDS = ["userEmail", "userPassword", "userConfirmPassword"];
 
@@ -47,47 +47,27 @@ function toPayload(values) {
 }
 
 export default function CompanyEntry({ open, company, onClose, onSaved }) {
-  const setNotification = useSetAtom(notificationModal);
+  const notify = useNotify();
   const [loading, setLoading] = useState(false);
   const isEdit = !!company?.id;
   const hasAccount = !!company?.users?.[0];
 
   function handleSubmit(values) {
     setLoading(true);
-
     const payload = toPayload(values);
-
-    (isEdit
+    const request = isEdit
       ? ApiService.put(API_LINK.CompanyDetails(company.id), payload)
-      : ApiService.post(API_LINK.Company, payload)
-    )
-      .then((res) => {
-        if (res.status === "success") {
-          setNotification({
-            open: true,
-            title: "Success",
-            description: res?.message,
-          });
+      : ApiService.post(API_LINK.Company, payload);
+
+    notify
+      .submit(request, {
+        errorText: "Failed to save company",
+        onSuccess: (res) => {
           onSaved?.(res?.data);
           formik.resetForm();
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
+        },
       })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to save company",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }
 
   const formik = useFormik({
@@ -121,11 +101,7 @@ export default function CompanyEntry({ open, company, onClose, onSaved }) {
           placeholder="Tablewise Gulshan"
           required
           className="form-span-2"
-          value={formik.values.name}
-          onChange={formik.handleChange("name")}
-          onBlur={formik.handleBlur("name")}
-          showError={!!(formik.touched.name && formik.errors.name)}
-          error={formik.errors.name}
+          {...inputProps(formik, "name")}
         />
 
         <p className="form-section">Contact Person</p>
@@ -134,48 +110,21 @@ export default function CompanyEntry({ open, company, onClose, onSaved }) {
           placeholder="Full name"
           required
           className="form-span-2"
-          value={formik.values.contactPersonName}
-          onChange={formik.handleChange("contactPersonName")}
-          onBlur={formik.handleBlur("contactPersonName")}
-          showError={
-            !!(
-              formik.touched.contactPersonName &&
-              formik.errors.contactPersonName
-            )
-          }
-          error={formik.errors.contactPersonName}
+          {...inputProps(formik, "contactPersonName")}
         />
         <InputField
           label="Email"
           type="email"
           placeholder="contact@company.com"
           required
-          value={formik.values.contactPersonEmail}
-          onChange={formik.handleChange("contactPersonEmail")}
-          onBlur={formik.handleBlur("contactPersonEmail")}
-          showError={
-            !!(
-              formik.touched.contactPersonEmail &&
-              formik.errors.contactPersonEmail
-            )
-          }
-          error={formik.errors.contactPersonEmail}
+          {...inputProps(formik, "contactPersonEmail")}
         />
         <InputField
           label="Phone"
           type="tel"
           placeholder="+8801XXXXXXXXX"
           required
-          value={formik.values.contactPersonPhone}
-          onChange={formik.handleChange("contactPersonPhone")}
-          onBlur={formik.handleBlur("contactPersonPhone")}
-          showError={
-            !!(
-              formik.touched.contactPersonPhone &&
-              formik.errors.contactPersonPhone
-            )
-          }
-          error={formik.errors.contactPersonPhone}
+          {...inputProps(formik, "contactPersonPhone")}
         />
 
         <p className="form-section">Location</p>
@@ -185,51 +134,31 @@ export default function CompanyEntry({ open, company, onClose, onSaved }) {
           rows={2}
           required
           className="form-span-2"
-          value={formik.values.address}
-          onChange={formik.handleChange("address")}
-          onBlur={formik.handleBlur("address")}
-          showError={!!(formik.touched.address && formik.errors.address)}
-          error={formik.errors.address}
+          {...inputProps(formik, "address")}
         />
         <InputField
           label="City"
           placeholder="City "
           required
-          value={formik.values.city}
-          onChange={formik.handleChange("city")}
-          onBlur={formik.handleBlur("city")}
-          showError={!!(formik.touched.city && formik.errors.city)}
-          error={formik.errors.city}
+          {...inputProps(formik, "city")}
         />
         <InputField
           label="State"
           placeholder="State"
           required
-          value={formik.values.state}
-          onChange={formik.handleChange("state")}
-          onBlur={formik.handleBlur("state")}
-          showError={!!(formik.touched.state && formik.errors.state)}
-          error={formik.errors.state}
+          {...inputProps(formik, "state")}
         />
         <InputField
           label="Zip Code"
           placeholder="Zip Code"
           required
-          value={formik.values.zipCode}
-          onChange={formik.handleChange("zipCode")}
-          onBlur={formik.handleBlur("zipCode")}
-          showError={!!(formik.touched.zipCode && formik.errors.zipCode)}
-          error={formik.errors.zipCode}
+          {...inputProps(formik, "zipCode")}
         />
         <InputField
           label="Country"
           placeholder="Country"
           required
-          value={formik.values.country}
-          onChange={formik.handleChange("country")}
-          onBlur={formik.handleBlur("country")}
-          showError={!!(formik.touched.country && formik.errors.country)}
-          error={formik.errors.country}
+          {...inputProps(formik, "country")}
         />
 
         <p className="form-section">Login Account</p>
@@ -241,11 +170,7 @@ export default function CompanyEntry({ open, company, onClose, onSaved }) {
           required
           hint="This account is created as the company's Super Admin"
           className="form-span-2"
-          value={formik.values.userEmail}
-          onChange={formik.handleChange("userEmail")}
-          onBlur={formik.handleBlur("userEmail")}
-          showError={!!(formik.touched.userEmail && formik.errors.userEmail)}
-          error={formik.errors.userEmail}
+          {...inputProps(formik, "userEmail")}
         />
         <InputField
           label={hasAccount ? "New Password" : "Password"}
@@ -256,13 +181,7 @@ export default function CompanyEntry({ open, company, onClose, onSaved }) {
           hint={
             hasAccount ? "Leave blank to keep the current password" : undefined
           }
-          value={formik.values.userPassword}
-          onChange={formik.handleChange("userPassword")}
-          onBlur={formik.handleBlur("userPassword")}
-          showError={
-            !!(formik.touched.userPassword && formik.errors.userPassword)
-          }
-          error={formik.errors.userPassword}
+          {...inputProps(formik, "userPassword")}
         />
         <InputField
           label="Confirm Password"
@@ -270,16 +189,7 @@ export default function CompanyEntry({ open, company, onClose, onSaved }) {
           placeholder="••••••••"
           autoComplete="new-password"
           required={!hasAccount}
-          value={formik.values.userConfirmPassword}
-          onChange={formik.handleChange("userConfirmPassword")}
-          onBlur={formik.handleBlur("userConfirmPassword")}
-          showError={
-            !!(
-              formik.touched.userConfirmPassword &&
-              formik.errors.userConfirmPassword
-            )
-          }
-          error={formik.errors.userConfirmPassword}
+          {...inputProps(formik, "userConfirmPassword")}
         />
         <CustomSwitch
           name="status"

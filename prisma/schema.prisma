@@ -12,13 +12,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum USER_ROLE {
-  SUPER_ADMIN
-  ADMIN
-  MANAGER
-  USER
-}
-
 enum STATUS {
   ACTIVE
   INACTIVE
@@ -66,20 +59,47 @@ enum SALARY_TYPE {
   SALARY
 }
 
+enum ORDER_STATUS {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum SHIFT_STATUS {
+  ON_SHIFT
+  COMPLETED
+  ABSENCE
+}
+
+enum ORDER_TYPE {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+}
+
 model User {
-  id          String       @id @default(cuid())
-  branchId    String?
-  staffId     String?
-  email       String       @unique
-  password    String
-  hash        String
-  role        USER_ROLE    @default(USER)
-  status      STATUS       @default(ACTIVE)
-  accountType ACCOUNT_TYPE @default(HEADQUARTER)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  company     Company?     @relation(fields: [branchId], references: [id])
-  staff       Staff?       @relation(fields: [staffId], references: [id])
+  id                String            @id @default(cuid())
+  branchId          String?
+  staffId           String?
+  email             String            @unique
+  password          String
+  hash              String
+  roleId            String
+  status            STATUS            @default(ACTIVE)
+  accountType       ACCOUNT_TYPE      @default(HEADQUARTER)
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  company           Company?          @relation(fields: [branchId], references: [id])
+  staff             Staff?            @relation(fields: [staffId], references: [id])
+  role              Role              @relation(fields: [roleId], references: [id])
+  salesOrders       SalesOrder[]
+  shiftsStarted     StaffShift[]      @relation("ShiftStartedBy")
+  shiftsEnded       StaffShift[]      @relation("ShiftEndedBy")
+  breaksStarted     StaffShiftBreak[] @relation("BreakStartedBy")
+  breaksEnded       StaffShiftBreak[] @relation("BreakEndedBy")
+  sessions          UserSession[]
 }
 
 model Company {
@@ -105,6 +125,9 @@ model Company {
   staffs             Staff[]
   staffAssignments   StaffAssignment[]
   menuItemOutlets    MenuItemOutlet[]
+  salesOrders        SalesOrder[]
+  staffShifts        StaffShift[]
+  roles              Role[]
 
   @@unique([parentId, name])
 }
@@ -138,6 +161,8 @@ model Staff {
   outlet         Company           @relation(fields: [branchId], references: [id])
   users          User[]
   assignments    StaffAssignment[]
+  salesOrders    SalesOrder[]
+  shifts         StaffShift[]
 }
 
 model StaffAssignment {
@@ -151,8 +176,45 @@ model StaffAssignment {
   updatedAt DateTime  @updatedAt
   staff     Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
   outlet    Company   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+}
 
-  @@unique([staffId, branchId])
+model StaffShift {
+  id          String            @id @default(cuid())
+  staffId     String
+  branchId    String
+  startedById String?
+  endedById   String?
+  clockInAt   DateTime          @default(now())
+  clockOutAt  DateTime?
+  status      SHIFT_STATUS      @default(ON_SHIFT)
+  note        String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  staff       Staff             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  outlet      Company           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  startedBy   User?             @relation("ShiftStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
+  endedBy     User?             @relation("ShiftEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  breaks      StaffShiftBreak[]
+
+  @@index([branchId, status])
+  @@index([staffId, status])
+}
+
+model StaffShiftBreak {
+  id          String     @id @default(cuid())
+  shiftId     String
+  startedById String?
+  endedById   String?
+  startAt     DateTime   @default(now())
+  endAt       DateTime?
+  note        String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  shift       StaffShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  startedBy   User?      @relation("BreakStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
+  endedBy     User?      @relation("BreakEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+
+  @@index([shiftId, endAt])
 }
 
 model Menu {
@@ -172,27 +234,27 @@ model MenuItem {
   name           String
   description    String?
   menuItemImage  String?
-  status         STATUS           @default(ACTIVE)
+  status         ITEM_STATUS      @default(AVAILABLE)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   menu           Menu             @relation(fields: [menuId], references: [id])
   menuItemPrices MenuItemPrice[]
   itemOutlets    MenuItemOutlet[]
+  orderItems     SalesOrderItem[]
 
   @@unique([menuId, name])
 }
 
 model MenuItemOutlet {
-  id         String      @id @default(cuid())
+  id         String   @id @default(cuid())
   menuItemId String
   branchId   String
-  price      Decimal?    @db.Decimal(10, 2)
-  stock      Int         @default(0)
-  status     ITEM_STATUS @default(AVAILABLE)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  menuItem   MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  outlet     Company     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  price      Decimal? @db.Decimal(10, 2)
+  stock      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  outlet     Company  @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@unique([menuItemId, branchId])
 }
@@ -202,20 +264,69 @@ model MenuItemPrice {
   menuItemId String
   basePrice  Decimal  @db.Decimal(10, 2)
   price      Decimal  @default(0.0) @db.Decimal(10, 2)
-  status     STATUS   @default(ACTIVE)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
 }
 
+model SalesOrder {
+  id            String           @id @default(cuid())
+  branchId      String
+  serverId      String
+  createdById   String?
+  orderNumber   String
+  orderType     ORDER_TYPE       @default(DINE_IN)
+  tableNumber   String?
+  customerName  String?
+  note          String?
+  totalItems    Int              @default(0)
+  totalAmount   Decimal          @default(0.0) @db.Decimal(10, 2)
+  status        ORDER_STATUS     @default(CONFIRMED)
+  confirmedAt   DateTime         @default(now())
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  slipPrintedAt DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  outlet        Company          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  server        Staff            @relation(fields: [serverId], references: [id], onDelete: Restrict)
+  createdBy     User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  items         SalesOrderItem[]
+
+  @@unique([branchId, orderNumber])
+}
+
+model SalesOrderItem {
+  id           String     @id @default(cuid())
+  salesOrderId String
+  menuItemId   String
+  itemName     String
+  unitPrice    Decimal    @db.Decimal(10, 2)
+  quantity     Int
+  lineTotal    Decimal    @db.Decimal(10, 2)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  menuItem     MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  @@unique([salesOrderId, menuItemId])
+}
+
 model Role {
   id                String            @id @default(cuid())
-  name              String            @unique
+  key               String            @unique
+  name              String
   description       String?
+  isSystem          Boolean           @default(false)
+  companyId         String?
   status            STATUS            @default(ACTIVE)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
+  company           Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users             User[]
   permissionBatches PermissionBatch[]
+
+  @@unique([companyId, name])
 }
 
 model Permission {
@@ -240,4 +351,19 @@ model PermissionBatch {
   role         Role       @relation(fields: [roleId], references: [id])
 
   @@unique([roleId, permissionId])
+}
+
+model UserSession {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  lastUsedAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

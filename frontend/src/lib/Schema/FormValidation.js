@@ -38,6 +38,8 @@ const confirmPassword = yup
   .string()
   .oneOf([yup.ref("userPassword")], "Passwords do not match");
 
+const loginRole = yup.string().required("Login role is required");
+
 export const CompanyValidation = yup.object({
   ...companyFields,
   userPassword: yup
@@ -58,12 +60,14 @@ export const CompanyUpdateValidation = yup.object({
 
 const outletFields = {
   companyId: yup.string().required("Company is required"),
+  userRoleId: loginRole,
   name: yup.string().trim().required("Outlet name is required"),
 };
 
 export const OutletValidation = CompanyValidation.shape(outletFields);
 
-export const OutletUpdateValidation = CompanyUpdateValidation.shape(outletFields);
+export const OutletUpdateValidation =
+  CompanyUpdateValidation.shape(outletFields);
 
 const staffFields = {
   branchId: yup.string().required("Outlet is required"),
@@ -90,6 +94,7 @@ const staffFields = {
   state: yup.string().trim().required("State is required"),
   country: yup.string().trim().required("Country is required"),
   status: yup.string().oneOf(["ACTIVE", "INACTIVE"]).required(),
+  userRoleId: loginRole,
   userEmail: yup
     .string()
     .trim()
@@ -130,7 +135,10 @@ const isHttpUrl = (value) => {
   }
 };
 
-const imageUrl = yup.string().trim().test("image-url", "Enter a valid image URL", isHttpUrl);
+const imageUrl = yup
+  .string()
+  .trim()
+  .test("image-url", "Enter a valid image URL", isHttpUrl);
 
 export const MenuValidation = yup.object({
   name: yup.string().trim().required("Menu name is required"),
@@ -181,3 +189,20 @@ export const OutletPriceValidation = yup.object({
 export const isValidOutletPrice = (value) => optionalPrice.isValidSync(value);
 
 export const isValidStock = (value) => stockCount.isValidSync(value);
+
+export const PasswordChangeValidation = yup.object({
+  currentPassword: yup.string().required("Enter your current password"),
+  newPassword: yup
+    .string()
+    .required("Enter a new password")
+    .min(8, "Use at least 8 characters")
+    .max(72, "Password is too long")
+    .notOneOf(
+      [yup.ref("currentPassword")],
+      "The new password must differ from the current one",
+    ),
+  confirmPassword: yup
+    .string()
+    .required("Repeat the new password")
+    .oneOf([yup.ref("newPassword")], "The two passwords do not match"),
+});

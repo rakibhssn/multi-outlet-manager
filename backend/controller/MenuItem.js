@@ -2,6 +2,8 @@ const prisma = require("../config/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
 
+const { defaultPrice, effectivePrice } = branch;
+
 const ITEM_STATUSES = ["AVAILABLE", "UNAVAILABLE", "DISCONTINUED", "SOLD_OUT"];
 const SEARCH_FIELDS = ["name", "description"];
 
@@ -18,15 +20,6 @@ const outletSelect = {
   status: true,
   parent: { select: { id: true, name: true } },
 };
-
-function defaultPrice(latest) {
-  if (!latest) return null;
-  return Number(latest.price) > 0 ? Number(latest.price) : Number(latest.basePrice);
-}
-
-function effectivePrice(latest, override) {
-  return override !== null && override !== undefined ? Number(override) : defaultPrice(latest);
-}
 
 function toAmount(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -70,7 +63,8 @@ class MenuItem {
   async list(req, res) {
     try {
       const list = branch.listParams(req.query, { sortable: ["name", "status", "createdAt"] });
-      const { outletId, excludeOutletId, stockStatus } = req.query;
+      const { excludeOutletId, stockStatus } = req.query;
+      const outletId = (await branch.viewerOutlet(req.user)) ?? req.query.outletId;
       const stockWhere =
         stockStatus === "out" ? { stock: { lte: 0 } } : stockStatus === "in" ? { stock: { gt: 0 } } : {};
       const where = {

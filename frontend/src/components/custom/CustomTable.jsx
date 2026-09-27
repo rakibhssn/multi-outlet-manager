@@ -20,6 +20,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import AnimateButton from "./AnimateButton";
+import AutoCompleteField from "./AutoCompleteField";
 import CustomSelectField from "./CustomSelectField";
 import InputField from "./InputField";
 
@@ -64,6 +65,8 @@ export default function CustomTable({
   filterOptions,
   filterPlaceholder = "All",
   defaultFilter = "all",
+  onFilterSearch,
+  filterLoading = false,
   pagination = true,
   pageSize: initialPageSize = 10,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
@@ -182,7 +185,8 @@ export default function CustomTable({
   const resolveKey = (record, index) =>
     typeof rowKey === "function" ? rowKey(record, index) : record[rowKey] ?? index;
 
-  const showFilters = !!filterOptions?.length;
+  const remoteFilter = !!onFilterSearch;
+  const showFilters = remoteFilter ? !!filterOptions : !!filterOptions?.length;
   const hasToolbar =
     title || description || actions || onAdd || (showReload && reloadAction) || showSearch || showFilters;
 
@@ -207,7 +211,21 @@ export default function CustomTable({
                 className="table-search"
               />
             )}
-            {showFilters && (
+            {showFilters && remoteFilter && (
+              <AutoCompleteField
+                name="table-filter"
+                placeholder={filterPlaceholder}
+                options={filterOptions}
+                value={activeFilterValue === "all" ? null : activeFilterValue}
+                onValueChange={handleFilter}
+                onSearch={onFilterSearch}
+                loading={filterLoading}
+                filterLocally={false}
+                clearable
+                className="table-filter"
+              />
+            )}
+            {showFilters && !remoteFilter && (
               <CustomSelectField
                 name="table-filter"
                 placeholder={filterPlaceholder}

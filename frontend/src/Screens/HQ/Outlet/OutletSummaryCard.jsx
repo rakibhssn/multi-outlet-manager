@@ -15,7 +15,13 @@ export default function OutletSummaryCard({ summary = {}, onStockOutClick }) {
   const stockOut = summary.stockOut ?? 0;
   const sales = Number(summary.salesAmount ?? 0);
   const health = assigned ? Math.round((inStock / assigned) * 100) : 0;
-  const tone = !assigned ? "idle" : health >= 80 ? "good" : health >= 50 ? "warn" : "bad";
+  const tone = !assigned
+    ? "idle"
+    : health >= 80
+      ? "good"
+      : health >= 50
+        ? "warn"
+        : "bad";
 
   return (
     <section className="summary-card">
@@ -55,7 +61,10 @@ export default function OutletSummaryCard({ summary = {}, onStockOutClick }) {
           type="button"
           onClick={onStockOutClick}
           disabled={!stockOut}
-          className={cn("summary-tile summary-tile-action", stockOut > 0 && "summary-tile-alert")}
+          className={cn(
+            "summary-tile summary-tile-action",
+            stockOut > 0 && "summary-tile-alert",
+          )}
           aria-label={`${stockOut} items stocked out${stockOut ? ", view items" : ""}`}
         >
           <span className="summary-tile-icon summary-tile-icon-bad">

@@ -6,7 +6,12 @@ const response = require("./Response");
 
 const UPLOAD_ROOT = path.join(__dirname, "..", "uploads");
 const FOLDERS = ["menu", "menu-item", "company", "staff"];
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const IMAGE_TYPES = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
 const MAX_SIZE = 5 * 1024 * 1024;
 
 const storage = multer.diskStorage({
@@ -18,7 +23,7 @@ const storage = multer.diskStorage({
     done(null, dir);
   },
   filename: (req, file, done) => {
-    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const ext = IMAGE_TYPES[file.mimetype];
     done(null, `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`);
   },
 });
@@ -27,7 +32,7 @@ const imageUpload = multer({
   storage,
   limits: { fileSize: MAX_SIZE },
   fileFilter: (req, file, done) => {
-    if (IMAGE_TYPES.includes(file.mimetype)) return done(null, true);
+    if (Object.hasOwn(IMAGE_TYPES, file.mimetype)) return done(null, true);
     return done(Object.assign(new Error("Only JPG, PNG, WEBP or GIF images are allowed!"), { status: 422 }));
   },
 }).single("file");

@@ -1,63 +1,61 @@
 import React, { useMemo, useState } from "react";
 import { useFormik } from "formik";
-import { useAtom } from "jotai";
 import { format, parseISO } from "date-fns";
 import {
+  AutoCompleteField,
   CustomDatepicker,
   CustomDialog,
-  CustomSelectField,
   CustomTextarea,
 } from "@/components/custom";
+import useNotify from "@/hooks/useNotify";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
+import { fullName, outletOption } from "@/lib/Functions/Common";
+import useRemoteOptions from "@/hooks/useRemoteOptions";
+import useScope from "@/hooks/useScope";
 import { StaffTransferValues } from "@/lib/Schema/FormValues";
 import { StaffTransferValidation } from "@/lib/Schema/FormValidation";
-import { notificationModal } from "@/lib/Variables";
+import { dateProps, inputProps, selectProps } from "@/lib/Functions/FormField";
 
-export default function StaffTransfer({ open, staff, outletOptions = [], onClose, onSaved }) {
-  const [, setNotification] = useAtom(notificationModal);
+export default function StaffTransfer({ open, staff, onClose, onSaved }) {
+  const notify = useNotify();
+  const scope = useScope();
+  const outlets = useRemoteOptions({
+    url: API_LINK.Outlet,
+    params: { companyId: scope.companyId || undefined },
+    mapOption: outletOption,
+    enabled: open,
+    errorText: "Failed to load outlets",
+  });
   const [loading, setLoading] = useState(false);
 
   const postedSince = staff?.assignments?.[0]?.startDate;
-  const minDate = postedSince ? parseISO(String(postedSince).slice(0, 10)) : undefined;
-  const fullName = staff ? `${staff.firstName} ${staff.lastName}` : "";
+  const minDate = postedSince
+    ? parseISO(String(postedSince).slice(0, 10))
+    : undefined;
 
   const options = useMemo(
-    () => outletOptions.filter((option) => option.value !== staff?.branchId),
-    [outletOptions, staff?.branchId],
+    () => outlets.options.filter((option) => option.value !== staff?.branchId),
+    [outlets.options, staff?.branchId],
   );
 
   function handleSubmit(values) {
     setLoading(true);
-
-    ApiService.post(API_LINK.StaffTransfer(staff.id), {
+    const request = ApiService.post(API_LINK.StaffTransfer(staff.id), {
       branchId: values.branchId,
       transferDate: values.transferDate,
       note: values.note,
-    })
-      .then((res) => {
-        setNotification({
-          open: true,
-          title: res.status === "success" ? "Success" : "Error",
-          description: res?.message,
-          type: res.status === "success" ? "success" : "error",
-        });
-        if (res.status === "success") {
+    });
+
+    notify
+      .submit(request, {
+        errorText: "Failed to transfer staff",
+        onSuccess: () => {
           formik.resetForm();
           onSaved?.();
-        }
+        },
       })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to transfer staff",
-          type: "error",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }
 
   const formik = useFormik({
@@ -80,7 +78,7 @@ export default function StaffTransfer({ open, staff, outletOptions = [], onClose
         }
       }}
       title="Transfer Staff"
-      description={`Move ${fullName} to another outlet. The current posting is closed on the transfer date.`}
+      description={`Move ${fullName(staff)} to another outlet. The current posting is closed on the transfer date.`}
       submitLabel="Transfer"
       submitLoading={loading}
       onSubmit={formik.handleSubmit}
@@ -88,25 +86,28 @@ export default function StaffTransfer({ open, staff, outletOptions = [], onClose
       <form onSubmit={formik.handleSubmit} noValidate className="form-grid">
         <div className="transfer-current form-span-2">
           <span className="transfer-current-label">Currently at</span>
-          <span className="cell-title">{staff?.outlet?.name ?? "No outlet"}</span>
+          <span className="cell-title">
+            {staff?.outlet?.name ?? "No outlet"}
+          </span>
           {staff?.outlet?.parent?.name && (
             <span className="cell-sub">{staff.outlet.parent.name}</span>
           )}
           {minDate && (
-            <span className="cell-sub">Since {format(minDate, "dd MMM yyyy")}</span>
+            <span className="cell-sub">
+              Since {format(minDate, "dd MMM yyyy")}
+            </span>
           )}
         </div>
-        <CustomSelectField
+        <AutoCompleteField
           label="Transfer To"
-          placeholder="Select outlet"
+          placeholder="Search outlet"
           options={options}
+          onSearch={outlets.onSearch}
+          loading={outlets.loading}
+          filterLocally={false}
           required
           className="form-span-2"
-          value={formik.values.branchId}
-          onValueChange={formik.handleChange("branchId")}
-          onBlur={formik.handleBlur("branchId")}
-          showError={!!(formik.touched.branchId && formik.errors.branchId)}
-          error={formik.errors.branchId}
+          {...selectProps(formik, "branchId")}
         />
         <CustomDatepicker
           label="Transfer Date"
@@ -115,24 +116,14 @@ export default function StaffTransfer({ open, staff, outletOptions = [], onClose
           minDate={minDate}
           maxDate={new Date()}
           clearable={false}
-          value={formik.values.transferDate}
-          onChange={(date) =>
-            formik.handleChange("transferDate")(date ? format(date, "yyyy-MM-dd") : "")
-          }
-          onBlur={formik.handleBlur("transferDate")}
-          showError={!!(formik.touched.transferDate && formik.errors.transferDate)}
-          error={formik.errors.transferDate}
+          {...dateProps(formik, "transferDate")}
         />
         <CustomTextarea
           label="Note"
           placeholder="Reason for the transfer"
           maxLength={255}
           className="form-span-2"
-          value={formik.values.note}
-          onChange={formik.handleChange("note")}
-          onBlur={formik.handleBlur("note")}
-          showError={!!(formik.touched.note && formik.errors.note)}
-          error={formik.errors.note}
+          {...inputProps(formik, "note")}
         />
       </form>
     </CustomDialog>

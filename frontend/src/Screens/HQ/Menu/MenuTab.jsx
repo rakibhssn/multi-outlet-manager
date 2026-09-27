@@ -22,7 +22,14 @@ export default function MenuTab({ menu, onChange }) {
           key: "items",
           label: `Menu Items (${menu?._count?.menuItems ?? 0})`,
           icon: LuSoup,
-          content: <MenuItemList key={menu?.id} menuId={menu?.id} onChange={onChange} />,
+          content: (
+            <MenuItemList
+              key={menu?.id}
+              menuId={menu?.id}
+              menuName={menu?.name}
+              onChange={onChange}
+            />
+          ),
         },
       ]}
     />

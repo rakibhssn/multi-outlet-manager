@@ -1,12 +1,22 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtom } from "jotai";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActionComp, CustomTable, StatusComp } from "@/components/custom";
+import {
+  OutletPriceCell,
+  StackCell,
+  StockCell,
+} from "@/Screens/Layout/TableCells";
+import useCan from "@/hooks/useCan";
+import useConfirm from "@/hooks/useConfirm";
+import useNotify from "@/hooks/useNotify";
+import useRemoteOptions from "@/hooks/useRemoteOptions";
+import useTableList from "@/hooks/useTableList";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
-import { formatMoney } from "@/lib/Functions/Common";
+import { formatMoney, nameOption } from "@/lib/Functions/Common";
 import { OutletItemColumn } from "@/lib/TableData/Columns";
-import { confirmModal, emptyNotifyData, notificationModal } from "@/lib/Variables";
-import OutletPriceDialog from "@/Screens/HQ/MenuItem/OutletPriceDialog";
+import OutletPriceDialog, {
+  outletAssignment,
+} from "@/Screens/HQ/MenuItem/OutletPriceDialog";
 import OutletAssignItem from "./OutletAssignItem";
 
 const DEFAULT_PARAMS = {
@@ -16,219 +26,101 @@ const DEFAULT_PARAMS = {
   order_by: "desc",
 };
 
-const SEARCH_DEBOUNCE = 400;
+const COLUMNS = OutletItemColumn.filter(
+  (column) => !["id", "status"].includes(column.key),
+);
+const READ_COLUMNS = COLUMNS.filter((column) => column.key !== "action");
 
 export default function OutletItemList({ outlet, onChange }) {
-  const [, setConfirmation] = useAtom(confirmModal);
-  const [, setNotification] = useAtom(notificationModal);
-  const [params, setParams] = useState(DEFAULT_PARAMS);
-  const [data, setData] = useState({ data: [], total: 0 });
-  const [menuOptions, setMenuOptions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const notify = useNotify();
+  const confirm = useConfirm();
+  const can = useCan();
+  const canStock = can("outlets.stock");
+  const { rows, offset, reload, params, ...table } = useTableList({
+    url: API_LINK.MenuItem,
+    defaults: DEFAULT_PARAMS,
+    initialParams: { outletId: outlet?.id },
+    filterParam: "menuId",
+    enabled: !!outlet?.id,
+    errorText: "Failed to load items",
+  });
   const [openAssign, setOpenAssign] = useState(false);
   const [priceRow, setPriceRow] = useState(null);
 
-  const fetchItems = useCallback(() => {
-    if (!outlet?.id) return;
-    setLoading(true);
+  const menuFilter = useRemoteOptions({
+    url: API_LINK.Menu,
+    mapOption: nameOption,
+    errorText: "Failed to load menus",
+  });
 
-    ApiService.get(API_LINK.MenuItem, { params: { ...params, outletId: outlet.id } })
-      .then((res) => {
-        if (res.status === "success") {
-          setData({ data: res?.data ?? [], total: res?.total ?? 0 });
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-            type: "error",
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load items",
-          type: "error",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [outlet?.id, params, setNotification]);
-
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
-
-  useEffect(() => {
-    ApiService.get(API_LINK.Menu, { params: { per_page: 100, sort_by: "name", order_by: "asc" } })
-      .then((res) => {
-        if (res.status === "success") {
-          setMenuOptions((res?.data ?? []).map((menu) => ({ label: menu.name, value: menu.id })));
-        }
-      })
-      .catch(() => setMenuOptions([]));
-  }, []);
-
-  const removeItem = useCallback(
-    (row) => {
-      ApiService.delete(API_LINK.MenuItemOutlet(row.id, outlet.id))
-        .then((res) => {
-          setNotification({
-            open: true,
-            title: res.status === "success" ? "Success" : "Error",
-            description: res?.message,
-            type: res.status === "success" ? "success" : "error",
-          });
-          if (res.status === "success") {
-            fetchItems();
-            onChange?.();
-            setConfirmation(emptyNotifyData);
-          }
-        })
-        .catch((error) => {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: error?.response?.data?.message ?? "Failed to remove item",
-            type: "error",
-          });
-        });
-    },
-    [outlet?.id, fetchItems, onChange, setConfirmation, setNotification],
-  );
-
-  const handleRemove = useCallback(
-    (row) => {
-      const confirmationPayload = {
-        open: true,
-        title: "Remove Item",
-        description: "",
-        body: `"${outlet?.name}" will stop selling "${row.name}". Continue?`,
-        type: "success",
-        footer: true,
-        cancelButton: true,
-        remove: true,
-        submitLabel: "Remove",
-        submitClick: () => removeItem(row),
-      };
-
-      setConfirmation(confirmationPayload);
-    },
-    [outlet?.name, removeItem, setConfirmation],
-  );
-
-  const columns = useMemo(() => OutletItemColumn.filter((column) => !["id", "status"].includes(column.key)), []);
+  const refresh = useCallback(() => {
+    reload();
+    onChange?.();
+  }, [reload, onChange]);
 
   const items = useMemo(() => {
-    if (!data.data || data.data.length === 0) return [];
+    const removeItem = (row) =>
+      confirm.remove({
+        title: "Remove Item",
+        body: `"${outlet?.name}" will stop selling "${row.name}". Continue?`,
+        label: "Remove",
+        onConfirm: () =>
+          notify.submit(
+            ApiService.delete(API_LINK.MenuItemOutlet(row.id, outlet.id)),
+            {
+              errorText: "Failed to remove item",
+              onSuccess: () => {
+                refresh();
+                confirm.close();
+              },
+            },
+          ),
+      });
 
-    const offset = (params.page - 1) * params.per_page;
-
-    return data.data.map((row, index) => ({
+    return rows.map((row, index) => ({
       key: row.id,
       id: 1 + index + offset,
-      name: (
-        <div className="cell-stack">
-          <span className="cell-title">{row.name}</span>
-          <span className="cell-sub">{row.menu?.name}</span>
-        </div>
+      name: <StackCell title={row.name} subtitle={row.menu?.name} />,
+      defaultPrice: (
+        <span className="price-inherit">{formatMoney(row.defaultPrice)}</span>
       ),
-      defaultPrice: <span className="price-inherit">{formatMoney(row.defaultPrice)}</span>,
-      outletPrice:
-        row.outletPrice !== null && row.outletPrice !== undefined ? (
-          <span className="price-override">{formatMoney(row.outletPrice)}</span>
-        ) : (
-          <span className="price-inherit">Default</span>
-        ),
-      stock:
-        row.stock > 0 ? (
-          <span className="stock-count">{row.stock}</span>
-        ) : (
-          <span className="stock-out">Out</span>
-        ),
+      outletPrice: <OutletPriceCell price={row.outletPrice} />,
+      stock: <StockCell stock={row.stock} />,
       status: <StatusComp type={row.status} />,
       action: (
         <ActionComp
           className="justify-end"
-          edit={true}
+          edit={canStock}
           editTitle="Price & stock"
-          editAction={() =>
-            setPriceRow({
-              menuItemId: row.id,
-              outletId: outlet.id,
-              itemName: row.name,
-              outletName: outlet.name,
-              price: row.outletPrice,
-              stock: row.stock,
-              defaultPrice: row.defaultPrice,
-            })
-          }
-          remove={true}
+          editAction={() => setPriceRow(outletAssignment(row, outlet))}
+          remove={canStock}
           deleteTitle="Remove"
-          deleteAction={() => handleRemove(row)}
+          deleteAction={() => removeItem(row)}
         />
       ),
     }));
-  }, [data, params.page, params.per_page, outlet, handleRemove]);
-
-  const handleChanges = useCallback(({ page, pageSize, sortField, sort, filter }) => {
-    setParams((prev) => ({
-      ...prev,
-      page,
-      per_page: pageSize,
-      sort_by: sortField ?? DEFAULT_PARAMS.sort_by,
-      order_by: sort?.direction ?? DEFAULT_PARAMS.order_by,
-      menuId: filter ?? undefined,
-    }));
-  }, []);
-
-  const handleSearch = useCallback((value) => {
-    const search = value.trim();
-    setParams((prev) => ({
-      ...prev,
-      page: 1,
-      search_by: search || undefined,
-    }));
-  }, []);
-
-  const searchTimer = useRef(null);
-
-  const debouncedSearch = useCallback(
-    (value) => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-      searchTimer.current = setTimeout(() => handleSearch(value), SEARCH_DEBOUNCE);
-    },
-    [handleSearch],
-  );
-
-  useEffect(
-    () => () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-    },
-    [],
-  );
+  }, [rows, offset, refresh, outlet, canStock, notify, confirm]);
 
   return (
     <div className="page-section">
       <CustomTable
         title="Assigned Items"
         description="Menu items sold at this outlet, their price and stock here"
-        columns={columns}
+        columns={canStock ? COLUMNS : READ_COLUMNS}
         dataSource={items}
         rowKey="key"
-        loading={loading}
-        total={data.total}
+        loading={table.loading}
+        total={table.total}
         pageSize={params.per_page}
-        onChange={handleChanges}
-        onSearch={debouncedSearch}
-        filterOptions={menuOptions}
+        onChange={table.onChange}
+        onSearch={table.onSearch}
+        filterOptions={menuFilter.options}
+        onFilterSearch={menuFilter.onSearch}
+        filterLoading={menuFilter.loading}
         filterPlaceholder="All menus"
         addLabel="Assign Items"
-        onAdd={() => setOpenAssign(true)}
-        reloadAction={fetchItems}
+        onAdd={canStock ? () => setOpenAssign(true) : undefined}
+        reloadAction={reload}
         showReload={true}
         searchPlaceholder="Search items..."
         emptyText="No item assigned yet"
@@ -237,12 +129,10 @@ export default function OutletItemList({ outlet, onChange }) {
       <OutletAssignItem
         open={openAssign}
         outlet={outlet}
-        menuOptions={menuOptions}
         onClose={() => setOpenAssign(false)}
         onSaved={() => {
           setOpenAssign(false);
-          fetchItems();
-          onChange?.();
+          refresh();
         }}
       />
 
@@ -252,8 +142,7 @@ export default function OutletItemList({ outlet, onChange }) {
         onClose={() => setPriceRow(null)}
         onSaved={() => {
           setPriceRow(null);
-          fetchItems();
-          onChange?.();
+          refresh();
         }}
       />
     </div>

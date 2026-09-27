@@ -45,10 +45,16 @@ export default function SidebarMenus({ menus = [] }) {
 
 function SidebarGroupMenu({ menu, pathname }) {
   const { state, setOpen } = useSidebar();
-  const active = menu.children.some((child) => isRouteActive(pathname, child.link));
+  const active = menu.children.some((child) =>
+    isRouteActive(pathname, child.link),
+  );
 
   return (
-    <Collapsible key={active ? "active" : "idle"} defaultOpen={active} className="sidebar-group-menu">
+    <Collapsible
+      key={active ? "active" : "idle"}
+      defaultOpen={active}
+      className="sidebar-group-menu"
+    >
       <SidebarMenuItem>
         <CollapsibleTrigger
           render={

@@ -1,6 +1,8 @@
 const prisma = require("../backend/config/prisma");
 const commonController = require("../backend/controller/CommonController");
-const { ACCOUNT_TYPE, STATUS, USER_ROLE } = require("../generated/prisma");
+const { ACCOUNT_TYPE, STATUS } = require("../generated/prisma");
+const { syncRoles } = require("../backend/helper/Role_Access");
+const { SUPER_ADMIN_KEY } = require("../backend/helper/Permissions");
 
 const companyData = {
   name: process.env.AUTH_SEED_COMPANY_NAME || "Multi Outlet HQ",
@@ -19,6 +21,7 @@ const companyData = {
 };
 
 async function main() {
+  await syncRoles();
   const email = process.env.AUTH_SEED_EMAIL || "admin@example.com";
   const password = process.env.AUTH_SEED_PASSWORD || "ChangeMe123!";
 
@@ -39,7 +42,7 @@ async function main() {
       password: hashPassword,
       hash,
       accountType: ACCOUNT_TYPE.DEVELOPER,
-      role: USER_ROLE.SUPER_ADMIN,
+      role: { connect: { key: SUPER_ADMIN_KEY } },
       status: STATUS.ACTIVE,
       company: { connect: { id: company.id } },
     };

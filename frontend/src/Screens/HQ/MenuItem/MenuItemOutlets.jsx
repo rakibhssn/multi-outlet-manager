@@ -1,12 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtom } from "jotai";
-import { ActionComp, CustomDialog, CustomTable, StatusComp } from "@/components/custom";
+import React, { useMemo, useState } from "react";
+import {
+  ActionComp,
+  CustomDialog,
+  CustomTable,
+  StatusComp,
+} from "@/components/custom";
+import {
+  OutletPriceCell,
+  StackCell,
+  StockCell,
+} from "@/Screens/Layout/TableCells";
+import useCan from "@/hooks/useCan";
+import useConfirm from "@/hooks/useConfirm";
+import useNotify from "@/hooks/useNotify";
 import useScope from "@/hooks/useScope";
+import useTableList from "@/hooks/useTableList";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { formatMoney } from "@/lib/Functions/Common";
 import { MenuItemOutletColumn } from "@/lib/TableData/Columns";
-import { confirmModal, emptyNotifyData, notificationModal } from "@/lib/Variables";
 import MenuItemAssignOutlet from "./MenuItemAssignOutlet";
 import OutletPriceDialog from "./OutletPriceDialog";
 
@@ -17,134 +29,61 @@ const DEFAULT_PARAMS = {
   order_by: "desc",
 };
 
-const SEARCH_DEBOUNCE = 400;
-
 export default function MenuItemOutlets({ open, item, onClose, onChange }) {
   const scope = useScope();
-  const [, setConfirmation] = useAtom(confirmModal);
-  const [, setNotification] = useAtom(notificationModal);
-  const [params, setParams] = useState(DEFAULT_PARAMS);
-  const [data, setData] = useState({ data: [], total: 0 });
-  const [loading, setLoading] = useState(false);
+  const notify = useNotify();
+  const confirm = useConfirm();
+  const can = useCan();
+  const canStock = can("outlets.stock");
+  const { rows, offset, reload, params, ...table } = useTableList({
+    url: item?.id ? API_LINK.MenuItemOutlets(item.id) : null,
+    defaults: DEFAULT_PARAMS,
+    initialParams: { companyId: scope.companyId || undefined },
+    enabled: open,
+    errorText: "Failed to load outlets",
+  });
   const [openAssign, setOpenAssign] = useState(false);
   const [priceRow, setPriceRow] = useState(null);
 
-  const fetchOutlets = useCallback(() => {
-    if (!open || !item?.id) return;
-    setLoading(true);
-
-    ApiService.get(API_LINK.MenuItemOutlets(item.id), {
-      params: { ...params, companyId: scope.companyId || undefined },
-    })
-      .then((res) => {
-        if (res.status === "success") {
-          setData({ data: res?.data ?? [], total: res?.total ?? 0 });
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-            type: "error",
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load outlets",
-          type: "error",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [open, item?.id, params, scope.companyId, setNotification]);
-
-  useEffect(() => {
-    fetchOutlets();
-  }, [fetchOutlets]);
-
-  const removeOutlet = useCallback(
-    (row) => {
-      ApiService.delete(API_LINK.MenuItemOutlet(item.id, row.branchId))
-        .then((res) => {
-          setNotification({
-            open: true,
-            title: res.status === "success" ? "Success" : "Error",
-            description: res?.message,
-            type: res.status === "success" ? "success" : "error",
-          });
-          if (res.status === "success") {
-            fetchOutlets();
-            onChange?.();
-            setConfirmation(emptyNotifyData);
-          }
-        })
-        .catch((error) => {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: error?.response?.data?.message ?? "Failed to remove outlet",
-            type: "error",
-          });
-        });
-    },
-    [item?.id, fetchOutlets, onChange, setConfirmation, setNotification],
-  );
-
-  const handleRemove = useCallback(
-    (row) => {
-      const confirmationPayload = {
-        open: true,
-        title: "Remove Outlet",
-        description: "",
-        body: `"${row.outlet?.name}" will stop selling "${item?.name}". Continue?`,
-        type: "success",
-        footer: true,
-        cancelButton: true,
-        remove: true,
-        submitLabel: "Remove",
-        submitClick: () => removeOutlet(row),
-      };
-
-      setConfirmation(confirmationPayload);
-    },
-    [item?.name, removeOutlet, setConfirmation],
-  );
-
   const outlets = useMemo(() => {
-    if (!data.data || data.data.length === 0) return [];
+    const removeOutlet = (row) =>
+      confirm.remove({
+        title: "Remove Outlet",
+        body: `"${row.outlet?.name}" will stop selling "${item?.name}". Continue?`,
+        label: "Remove",
+        onConfirm: () =>
+          notify.submit(
+            ApiService.delete(API_LINK.MenuItemOutlet(item.id, row.branchId)),
+            {
+              errorText: "Failed to remove outlet",
+              onSuccess: () => {
+                reload();
+                onChange?.();
+                confirm.close();
+              },
+            },
+          ),
+      });
 
-    const offset = (params.page - 1) * params.per_page;
-
-    return data.data.map((row, index) => ({
+    return rows.map((row, index) => ({
       key: row.id,
       id: 1 + index + offset,
       name: (
-        <div className="cell-stack">
-          <span className="cell-title">{row.outlet?.name}</span>
-          <span className="cell-sub">{row.outlet?.parent?.name}</span>
-        </div>
+        <StackCell
+          title={row.outlet?.name}
+          subtitle={row.outlet?.parent?.name}
+        />
       ),
-      defaultPrice: <span className="price-inherit">{formatMoney(row.defaultPrice)}</span>,
-      outletPrice:
-        row.price !== null ? (
-          <span className="price-override">{formatMoney(row.price)}</span>
-        ) : (
-          <span className="price-inherit">Default</span>
-        ),
-      stock:
-        row.stock > 0 ? (
-          <span className="stock-count">{row.stock}</span>
-        ) : (
-          <span className="stock-out">Out</span>
-        ),
+      defaultPrice: (
+        <span className="price-inherit">{formatMoney(row.defaultPrice)}</span>
+      ),
+      outletPrice: <OutletPriceCell price={row.price} />,
+      stock: <StockCell stock={row.stock} />,
       status: <StatusComp type={row.outlet?.status} />,
       action: (
         <ActionComp
           className="justify-end"
-          edit={true}
+          edit={canStock}
           editTitle="Price & stock"
           editAction={() =>
             setPriceRow({
@@ -157,49 +96,13 @@ export default function MenuItemOutlets({ open, item, onClose, onChange }) {
               defaultPrice: row.defaultPrice,
             })
           }
-          remove={true}
+          remove={canStock}
           deleteTitle="Remove"
-          deleteAction={() => handleRemove(row)}
+          deleteAction={() => removeOutlet(row)}
         />
       ),
     }));
-  }, [data, params.page, params.per_page, item, handleRemove]);
-
-  const handleChanges = useCallback(({ page, pageSize, sortField, sort }) => {
-    setParams((prev) => ({
-      ...prev,
-      page,
-      per_page: pageSize,
-      sort_by: sortField ?? DEFAULT_PARAMS.sort_by,
-      order_by: sort?.direction ?? DEFAULT_PARAMS.order_by,
-    }));
-  }, []);
-
-  const handleSearch = useCallback((value) => {
-    const search = value.trim();
-    setParams((prev) => ({
-      ...prev,
-      page: 1,
-      search_by: search || undefined,
-    }));
-  }, []);
-
-  const searchTimer = useRef(null);
-
-  const debouncedSearch = useCallback(
-    (value) => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-      searchTimer.current = setTimeout(() => handleSearch(value), SEARCH_DEBOUNCE);
-    },
-    [handleSearch],
-  );
-
-  useEffect(
-    () => () => {
-      if (searchTimer.current) clearTimeout(searchTimer.current);
-    },
-    [],
-  );
+  }, [rows, offset, reload, onChange, item, canStock, notify, confirm]);
 
   return (
     <CustomDialog
@@ -211,17 +114,21 @@ export default function MenuItemOutlets({ open, item, onClose, onChange }) {
       className="item-outlets-dialog"
     >
       <CustomTable
-        columns={MenuItemOutletColumn}
+        columns={
+          canStock
+            ? MenuItemOutletColumn
+            : MenuItemOutletColumn.filter((column) => column.key !== "action")
+        }
         dataSource={outlets}
         rowKey="key"
-        loading={loading}
-        total={data.total}
+        loading={table.loading}
+        total={table.total}
         pageSize={params.per_page}
-        onChange={handleChanges}
-        onSearch={debouncedSearch}
+        onChange={table.onChange}
+        onSearch={table.onSearch}
         addLabel="Assign Outlets"
-        onAdd={() => setOpenAssign(true)}
-        reloadAction={fetchOutlets}
+        onAdd={canStock ? () => setOpenAssign(true) : undefined}
+        reloadAction={reload}
         showReload={true}
         searchPlaceholder="Search outlets..."
         emptyText="This item is not sold at any outlet yet"
@@ -234,7 +141,7 @@ export default function MenuItemOutlets({ open, item, onClose, onChange }) {
         onClose={() => setOpenAssign(false)}
         onSaved={() => {
           setOpenAssign(false);
-          fetchOutlets();
+          reload();
           onChange?.();
         }}
       />
@@ -245,7 +152,7 @@ export default function MenuItemOutlets({ open, item, onClose, onChange }) {
         onClose={() => setPriceRow(null)}
         onSaved={() => {
           setPriceRow(null);
-          fetchOutlets();
+          reload();
         }}
       />
     </CustomDialog>
