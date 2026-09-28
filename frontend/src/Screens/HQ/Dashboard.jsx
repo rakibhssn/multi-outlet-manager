@@ -7,6 +7,7 @@ import {
   ViewBox,
   trendOf,
 } from "@/Screens/Layout/DashboardBlocks";
+import useCan from "@/hooks/useCan";
 import useNotify from "@/hooks/useNotify";
 import usePolling from "@/hooks/usePolling";
 import ApiService from "@/lib/ApiService";
@@ -14,6 +15,7 @@ import { API_LINK } from "@/lib/API_LINK";
 import SalesOrderDetails from "@/Screens/Sales/SalesOrderDetails";
 import OutletPerformance from "./OutletPerformance";
 import RecentActivity from "./RecentActivity";
+import Reminders from "./Reminder/Reminders";
 import RevenueByOutlet from "./RevenueByOutlet";
 import TodayOrders from "./TodayOrders";
 
@@ -21,6 +23,7 @@ const REFRESH_INTERVAL = 60000;
 
 export default function Dashboard() {
   const notify = useNotify();
+  const can = useCan();
   const [stats, setStats] = useState(null);
   const [detail, setDetail] = useState(null);
   const [orderId, setOrderId] = useState(null);
@@ -76,10 +79,10 @@ export default function Dashboard() {
       </div>
       <div className="dashboard-grid">
         <OutletPerformance />
-        <RecentActivity onOpenOrder={setOrderId} />
+        {can("reminders.view") && <Reminders />}
       </div>
       <div className="dashboard-grid dashboard-grid-even">
-        <ViewBox title="Top Outlets" />
+        <RecentActivity onOpenOrder={setOrderId} />
         <ViewBox title="Alerts" />
       </div>
 

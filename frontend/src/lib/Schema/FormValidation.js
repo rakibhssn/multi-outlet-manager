@@ -206,3 +206,17 @@ export const PasswordChangeValidation = yup.object({
     .required("Repeat the new password")
     .oneOf([yup.ref("newPassword")], "The two passwords do not match"),
 });
+
+export const ReminderValidation = yup.object({
+  title: yup
+    .string()
+    .trim()
+    .max(120, "Keep the title under 120 characters")
+    .required("Title is required"),
+  notes: yup.string().trim().max(1000, "Keep notes under 1000 characters"),
+  dueDate: yup.string().required("Pick a due date"),
+  dueTime: yup.string().required("Pick a time"),
+  priority: yup.string().oneOf(["LOW", "NORMAL", "HIGH"]).required(),
+  outletId: yup.string(),
+  staffId: yup.string(),
+});

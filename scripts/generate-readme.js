@@ -53,6 +53,11 @@ const DESCRIPTIONS = {
   "POST /role": "Create a role (headquarter: for its company; developer: shared by every company)",
   "PATCH /role/:id": "Rename a role, change its description, status or permissions (Super Admin is locked)",
   "DELETE /role/:id": "Delete a role nobody holds",
+  "GET /reminder": "Company reminders (`status` = OPEN, DONE or all) with open, overdue and done counts",
+  "POST /reminder": "Create a reminder with a title, notes, due date and time, priority, and an optional outlet and staff mention",
+  "PUT /reminder/:id": "Edit a reminder",
+  "PATCH /reminder/:id/done": "Mark a reminder done (`done: false` reopens it)",
+  "DELETE /reminder/:id": "Delete a reminder",
   "POST /upload/image": "Upload an image and get its public URL",
 };
 

@@ -48,5 +48,8 @@ export const API_LINK = {
   ShiftBreakStart: "shift/break/start",
   ShiftBreakEnd: "shift/break/end",
   Report: (type) => `report/${type}`,
+  Reminder: "reminder",
+  ReminderDetails: (id) => `reminder/${id}`,
+  ReminderDone: (id) => `reminder/${id}/done`,
   UploadImage: (folder) => `upload/image?folder=${folder}`,
 };

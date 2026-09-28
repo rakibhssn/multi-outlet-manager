@@ -104,6 +104,15 @@ const PERMISSION_GROUPS = [
     ],
   },
   {
+    label: "Reminders",
+    permissions: [
+      { key: "reminders.view", label: "View", kind: "page", hq: true },
+      { key: "reminders.create", label: "Create", kind: "action", hq: true },
+      { key: "reminders.edit", label: "Edit & mark done", kind: "action", hq: true },
+      { key: "reminders.delete", label: "Delete", kind: "action", hq: true },
+    ],
+  },
+  {
     label: "Roles",
     permissions: [
       { key: "roles.view", label: "View roles", kind: "page", hq: true },

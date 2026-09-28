@@ -59,6 +59,17 @@ enum SALARY_TYPE {
   SALARY
 }
 
+enum REMINDER_STATUS {
+  OPEN
+  DONE
+}
+
+enum REMINDER_PRIORITY {
+  LOW
+  NORMAL
+  HIGH
+}
+
 enum ORDER_STATUS {
   CONFIRMED
   COMPLETED
@@ -100,6 +111,7 @@ model User {
   breaksStarted     StaffShiftBreak[] @relation("BreakStartedBy")
   breaksEnded       StaffShiftBreak[] @relation("BreakEndedBy")
   sessions          UserSession[]
+  reminders         Reminder[]
 }
 
 model Company {
@@ -128,6 +140,8 @@ model Company {
   salesOrders        SalesOrder[]
   staffShifts        StaffShift[]
   roles              Role[]
+  reminders          Reminder[]        @relation("CompanyReminders")
+  outletReminders    Reminder[]        @relation("OutletReminders")
 
   @@unique([parentId, name])
 }
@@ -163,6 +177,7 @@ model Staff {
   assignments    StaffAssignment[]
   salesOrders    SalesOrder[]
   shifts         StaffShift[]
+  reminders      Reminder[]
 }
 
 model StaffAssignment {
@@ -366,4 +381,26 @@ model UserSession {
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model Reminder {
+  id          String            @id @default(cuid())
+  companyId   String
+  outletId    String?
+  staffId     String?
+  createdById String?
+  title       String
+  notes       String?
+  dueAt       DateTime
+  priority    REMINDER_PRIORITY @default(NORMAL)
+  status      REMINDER_STATUS   @default(OPEN)
+  completedAt DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  company     Company           @relation("CompanyReminders", fields: [companyId], references: [id], onDelete: Cascade)
+  outlet      Company?          @relation("OutletReminders", fields: [outletId], references: [id], onDelete: SetNull)
+  staff       Staff?            @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdBy   User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, dueAt])
 }

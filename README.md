@@ -159,7 +159,7 @@ Do not edit between the `START` and `END` markers — changes there are overwrit
 ## API
 
 <!-- API:START -->
-Base URL: `http://localhost:3050/api/v1` · 69 endpoints · generated from `backend/routes`.
+Base URL: `http://localhost:3050/api/v1` · 74 endpoints · generated from `backend/routes`.
 
 Protected endpoints need the header `Authorization: Bearer <accessToken>` from `POST /auth/login`.
 
@@ -291,6 +291,16 @@ Protected endpoints need the header `Authorization: Bearer <accessToken>` from `
 | `POST` | `/api/v1/role` | Yes | Create a role (headquarter: for its company; developer: shared by every company) |
 | `PATCH` | `/api/v1/role/:id` | Yes | Rename a role, change its description, status or permissions (Super Admin is locked) |
 | `DELETE` | `/api/v1/role/:id` | Yes | Delete a role nobody holds |
+
+### Reminder
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/reminder` | Yes | Company reminders (`status` = OPEN, DONE or all) with open, overdue and done counts |
+| `POST` | `/api/v1/reminder` | Yes | Create a reminder with a title, notes, due date and time, priority, and an optional outlet and staff mention |
+| `PUT` | `/api/v1/reminder/:id` | Yes | Edit a reminder |
+| `PATCH` | `/api/v1/reminder/:id/done` | Yes | Mark a reminder done (`done: false` reopens it) |
+| `DELETE` | `/api/v1/reminder/:id` | Yes | Delete a reminder |
 
 ### Upload
 
