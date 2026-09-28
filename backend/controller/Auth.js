@@ -8,6 +8,7 @@ const userInclude = {
   company: {
     include: { parent: { select: { id: true, name: true } } },
   },
+  staff: { select: { id: true, firstName: true, lastName: true } },
   role: { select: roleAccessSelect },
 };
 

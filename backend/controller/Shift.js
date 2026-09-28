@@ -75,12 +75,108 @@ async function closeOpenShifts(tx, staffId, { endedById = null, note = null } = 
 
 const cleanNote = (note) => (note ? String(note).trim().slice(0, 255) : null);
 
+const MAX_SHIFT_MS = 24 * 60 * 60 * 1000;
+const CLOCK_SKEW_MS = 60 * 1000;
+
+function dayOf(date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { gte: start, lt: end };
+}
+
+function readDate(value, label) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) throw fail(`${label} is not a valid date and time!`, 422);
+  if (date - Date.now() > CLOCK_SKEW_MS) throw fail(`${label} cannot be in the future!`, 422);
+  return date;
+}
+
+async function checkOneShiftPerDay(tx, staff, clockInAt, exceptId) {
+  const taken = await tx.staffShift.findFirst({
+    where: { staffId: staff.id, clockInAt: dayOf(clockInAt), ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { id: true },
+  });
+  if (taken) throw fail(`${staff.firstName} ${staff.lastName} already has a shift on this day!`, 409);
+}
+
+function readShiftTimes(body, shift) {
+  const clockInAt = readDate(body.clockInAt, "Clock in");
+  const clockOutAt = body.clockOutAt ? readDate(body.clockOutAt, "Clock out") : null;
+  if (!clockOutAt && shift.status !== "ON_SHIFT") throw fail("A completed shift needs a clock out time!", 422);
+  if (clockOutAt && clockOutAt <= clockInAt) throw fail("Clock out must be after clock in!", 422);
+  if ((clockOutAt ?? new Date()) - clockInAt > MAX_SHIFT_MS) throw fail("A shift cannot be longer than 24 hours!", 422);
+  return { clockInAt, clockOutAt };
+}
+
+function readBreaks(list, { clockInAt, clockOutAt }) {
+  const shiftEnd = clockOutAt ?? new Date();
+  const breaks = (Array.isArray(list) ? list : [])
+    .map((item, index) => ({
+      id: typeof item?.id === "string" ? item.id : null,
+      startAt: readDate(item?.startAt, `Break ${index + 1} start`),
+      endAt: item?.endAt ? readDate(item.endAt, `Break ${index + 1} end`) : null,
+    }))
+    .sort((a, b) => a.startAt - b.startAt);
+
+  breaks.forEach((item, index) => {
+    const label = `Break ${index + 1}`;
+    const last = index === breaks.length - 1;
+    if (item.startAt < clockInAt || item.startAt >= shiftEnd) throw fail(`${label} must start during the shift!`, 422);
+    if (!item.endAt && (clockOutAt || !last)) throw fail(`${label} needs an end time!`, 422);
+    if (item.endAt && (item.endAt <= item.startAt || item.endAt > shiftEnd)) {
+      throw fail(`${label} must end after it starts and before the shift ends!`, 422);
+    }
+    const next = breaks[index + 1];
+    if (next && item.endAt > next.startAt) throw fail(`${label} overlaps the next break!`, 422);
+  });
+  return breaks;
+}
+
+async function saveBreaks(tx, shift, breaks, userId) {
+  const keep = breaks.filter((item) => item.id && shift.breaks.some((current) => current.id === item.id));
+  await tx.staffShiftBreak.deleteMany({
+    where: { shiftId: shift.id, id: { notIn: keep.map((item) => item.id) } },
+  });
+  for (const item of breaks) {
+    const data = { startAt: item.startAt, endAt: item.endAt };
+    if (keep.includes(item)) {
+      await tx.staffShiftBreak.update({ where: { id: item.id }, data });
+    } else {
+      await tx.staffShiftBreak.create({
+        data: { ...data, shiftId: shift.id, startedById: userId, endedById: item.endAt ? userId : null },
+      });
+    }
+  }
+}
+
+function inViewerScope(user, shift) {
+  if (OUTLET_ACCOUNTS.includes(user.accountType)) return shift.branchId === user.branchId;
+  if (user.accountType === "HEADQUARTER") return shift.outlet?.parentId === user.branchId;
+  return user.accountType === "DEVELOPER";
+}
+
+async function findShift(user, id) {
+  const shift = await prisma.staffShift.findUnique({
+    where: { id },
+    include: { ...shiftInclude, outlet: { select: { id: true, name: true, parentId: true } } },
+  });
+  if (!shift || !inViewerScope(user, shift)) throw fail("Shift Not Found!", 404);
+  return shift;
+}
+
 async function requireOpenShift(req) {
   const user = loadViewer(req.user);
   const staff = await resolveStaff(user, req.body?.staffId);
   const shift = await openShiftOf(staff.id);
   if (!shift) throw fail(`${staff.firstName} ${staff.lastName} is not on shift!`, 422);
   return { user, staff, shift };
+}
+
+function staffScope(user, requestedId) {
+  if (can(user, "shifts.manage")) return requestedId ? { staffId: requestedId } : {};
+  return { staffId: user.staffId ?? "" };
 }
 
 function dateRange(from, to) {
@@ -114,6 +210,7 @@ class Shift {
 
   async list(req, res) {
     try {
+      const user = loadViewer(req.user);
       const list = branch.listParams(req.query, {
         sortable: ["clockInAt", "clockOutAt", "status", "createdAt"],
         sortBy: "clockInAt",
@@ -125,7 +222,7 @@ class Shift {
         ...(branchId ? { branchId } : {}),
         ...(req.query.companyId ? { outlet: { parentId: req.query.companyId } } : {}),
         ...(SHIFT_STATUSES.includes(req.query.status) ? { status: req.query.status } : {}),
-        ...(req.query.staffId ? { staffId: req.query.staffId } : {}),
+        ...staffScope(user, req.query.staffId),
         ...dateRange(req.query.from, req.query.to),
         ...(list.search ? { staff: staffSearch } : {}),
       };
@@ -162,6 +259,11 @@ class Shift {
           select: { id: true },
         });
         if (open) throw fail(`${staff.firstName} ${staff.lastName} is already on shift!`, 409);
+        const today = await tx.staffShift.findFirst({
+          where: { staffId: staff.id, clockInAt: dayOf(new Date()) },
+          select: { id: true },
+        });
+        if (today) throw fail(`${staff.firstName} ${staff.lastName} already had a shift today!`, 409);
 
         return tx.staffShift.create({
           data: {
@@ -190,6 +292,47 @@ class Shift {
       });
 
       return response.updateSuccess(res, shift, `${staff.firstName} ${staff.lastName} Ended The Shift`);
+    } catch (error) {
+      return branch.handleError(res, error, "Shift");
+    }
+  }
+
+  async update(req, res) {
+    try {
+      const user = loadViewer(req.user);
+      const body = req.body ?? {};
+      const current = await findShift(user, req.params.id);
+      const times = readShiftTimes(body, current);
+      const breaks = readBreaks(body.breaks ?? current.breaks, times);
+      const ending = !!times.clockOutAt;
+
+      const shift = await prisma.$transaction(async (tx) => {
+        await checkOneShiftPerDay(tx, current.staff, times.clockInAt, current.id);
+        await saveBreaks(tx, current, breaks, user.id);
+        return tx.staffShift.update({
+          where: { id: current.id },
+          data: {
+            ...times,
+            status: ending ? "COMPLETED" : "ON_SHIFT",
+            endedById: ending ? (current.endedById ?? user.id) : null,
+            ...(body.note !== undefined ? { note: cleanNote(body.note) } : {}),
+          },
+          include: shiftInclude,
+        });
+      });
+
+      return response.updateSuccess(res, shift, "Shift Updated");
+    } catch (error) {
+      return branch.handleError(res, error, "Shift");
+    }
+  }
+
+  async remove(req, res) {
+    try {
+      const user = loadViewer(req.user);
+      const current = await findShift(user, req.params.id);
+      await prisma.staffShift.delete({ where: { id: current.id } });
+      return response.deletionSuccess(res, { id: current.id }, "Shift Deleted");
     } catch (error) {
       return branch.handleError(res, error, "Shift");
     }

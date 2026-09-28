@@ -9,9 +9,10 @@ import {
 } from "react-icons/lu";
 import {
   CurrencyValue,
+  DashboardEmpty,
+  DashboardRow,
   PageHeader,
   StatCard,
-  ViewBox,
   trendOf,
 } from "@/Screens/Layout/DashboardBlocks";
 import useScope from "@/hooks/useScope";
@@ -23,6 +24,9 @@ import { plural } from "@/lib/Functions/Common";
 import LowStockItems from "./LowStockItems";
 import SalesOrderDetails from "@/Screens/Sales/SalesOrderDetails";
 import LiveOrders from "./LiveOrders";
+import NoticeBoard from "./NoticeBoard";
+import PopularItems from "./PopularItems";
+import StaffSchedule from "./StaffSchedule";
 import TodaySales from "./TodaySales";
 
 const REFRESH_INTERVAL = 60000;
@@ -37,13 +41,28 @@ export default function Dashboard() {
   const [detailId, setDetailId] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const show = {
+    sales: can("dashboard.outlet.sales"),
+    orders: can("dashboard.outlet.orders"),
+    staff: can("dashboard.outlet.staff"),
+    stock: can("dashboard.outlet.stock"),
+    salesToday: can("dashboard.outlet.sales_today") && can("orders.view"),
+    liveOrders: can("dashboard.outlet.live_orders") && can("orders.view"),
+    notices: can("dashboard.outlet.notices"),
+    popular: can("dashboard.outlet.popular"),
+    schedule: can("dashboard.outlet.schedule"),
+  };
+  const anyStat = show.sales || show.orders || show.staff || show.stock;
+  const anyCard = Object.values(show).some(Boolean);
+
   const fetchStats = useCallback(() => {
+    if (!anyStat) return;
     const params = { branchId: scope.outletId || undefined };
     notify.load(ApiService.get(API_LINK.OutletDashboard, { params }), {
       errorText: "Failed to load dashboard",
       onSuccess: (res) => setStats(res.data),
     });
-  }, [scope.outletId, notify]);
+  }, [scope.outletId, notify, anyStat]);
 
   useEffect(() => {
     fetchStats();
@@ -57,9 +76,9 @@ export default function Dashboard() {
   }, [fetchStats]);
 
   const loading = !stats;
-  const sales = trendOf(stats?.sales.change, stats?.sales.today);
-  const orders = trendOf(stats?.orders.change, stats?.orders.today);
-  const critical = stats?.stock.critical ?? 0;
+  const sales = trendOf(stats?.sales?.change, stats?.sales?.today);
+  const orders = trendOf(stats?.orders?.change, stats?.orders?.today);
+  const critical = stats?.stock?.critical ?? 0;
 
   return (
     <div className="dashboard">
@@ -67,71 +86,91 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle={`${scope.outletName ?? "Outlet"} overview for today`}
       />
-      <div className="dashboard-stats">
-        <StatCard
-          label="Today's Sales"
-          icon={LuWallet}
-          loading={loading}
-          value={<CurrencyValue amount={stats?.sales.today} />}
-          meta={sales.meta}
-          tone={sales.tone}
-        />
-        <StatCard
-          label="Total Orders"
-          icon={LuReceipt}
-          loading={loading}
-          value={(stats?.orders.today ?? 0).toLocaleString("en-US")}
-          meta={orders.meta}
-          tone={orders.tone}
-        />
-        <StatCard
-          label="Staff on Shift"
-          icon={LuUsers}
-          loading={loading}
-          value={stats?.staff.onShift ?? 0}
-          meta={`of ${plural(stats?.staff.active ?? 0, "active staff member")}${
-            stats?.staff.onBreak ? ` · ${stats.staff.onBreak} on break` : ""
-          }`}
-          tone={stats?.staff.onShift ? "up" : "muted"}
-          onClick={
-            can("shifts.view")
-              ? () => navigate("/outlet/shift?status=ON_SHIFT")
-              : undefined
-          }
-        />
-        <StatCard
-          label="Low Stock"
-          icon={LuPackageX}
-          loading={loading}
-          value={plural(stats?.stock.low ?? 0, "Item")}
-          meta={
-            critical ? (
-              <>
-                <LuTriangleAlert /> {critical} Critical
-              </>
-            ) : (
-              `At or below ${stats?.stock.lowLimit ?? 10} in stock`
-            )
-          }
-          tone={critical ? "alert" : "muted"}
-          onClick={() => setLowStockOpen(true)}
-          disabled={!stats?.stock.low}
-        />
-      </div>
-      {can("orders.view") && (
-        <div className="dashboard-grid">
+      {!anyCard && <DashboardEmpty />}
+      {anyStat && (
+        <div className="dashboard-stats">
+          {show.sales && (
+            <StatCard
+              label="Today's Sales"
+              icon={LuWallet}
+              loading={loading}
+              value={<CurrencyValue amount={stats?.sales?.today} />}
+              meta={sales.meta}
+              tone={sales.tone}
+            />
+          )}
+          {show.orders && (
+            <StatCard
+              label="Total Orders"
+              icon={LuReceipt}
+              loading={loading}
+              value={(stats?.orders?.today ?? 0).toLocaleString("en-US")}
+              meta={orders.meta}
+              tone={orders.tone}
+            />
+          )}
+          {show.staff && (
+            <StatCard
+              label="Staff on Shift"
+              icon={LuUsers}
+              loading={loading}
+              value={stats?.staff?.onShift ?? 0}
+              meta={`of ${plural(stats?.staff?.active ?? 0, "active staff member")}${
+                stats?.staff?.onBreak
+                  ? ` · ${stats.staff.onBreak} on break`
+                  : ""
+              }`}
+              tone={stats?.staff?.onShift ? "up" : "muted"}
+              onClick={
+                can("shifts.view")
+                  ? () => navigate("/outlet/shift?status=ON_SHIFT")
+                  : undefined
+              }
+            />
+          )}
+          {show.stock && (
+            <StatCard
+              label="Low Stock"
+              icon={LuPackageX}
+              loading={loading}
+              value={plural(stats?.stock?.low ?? 0, "Item")}
+              meta={
+                critical ? (
+                  <>
+                    <LuTriangleAlert /> {critical} Critical
+                  </>
+                ) : (
+                  `At or below ${stats?.stock?.lowLimit ?? 10} in stock`
+                )
+              }
+              tone={critical ? "alert" : "muted"}
+              onClick={() => setLowStockOpen(true)}
+              disabled={!stats?.stock?.low}
+            />
+          )}
+        </div>
+      )}
+      <DashboardRow>
+        {show.salesToday && (
           <TodaySales refreshKey={refreshKey} onView={setDetailId} />
+        )}
+        {show.liveOrders && (
           <LiveOrders
             refreshKey={refreshKey}
             onView={setDetailId}
             onChange={refresh}
           />
-        </div>
-      )}
-      <div className="dashboard-grid dashboard-grid-even">
-        <ViewBox title="Popular Items" />
-        <ViewBox title="Staff Schedule" />
-      </div>
+        )}
+      </DashboardRow>
+      {show.notices && <NoticeBoard outletId={scope.outletId} />}
+      <DashboardRow className="dashboard-grid-even">
+        {show.popular && (
+          <PopularItems outletId={scope.outletId} refreshKey={refreshKey} />
+        )}
+        {show.schedule && (
+          <StaffSchedule outletId={scope.outletId} refreshKey={refreshKey} />
+        )}
+      </DashboardRow>
 
       <SalesOrderDetails
         open={!!detailId}
@@ -141,10 +180,10 @@ export default function Dashboard() {
       />
 
       <LowStockItems
-        open={lowStockOpen}
+        open={show.stock && lowStockOpen}
         outletId={scope.outletId}
-        lowLimit={stats?.stock.lowLimit}
-        criticalLimit={stats?.stock.criticalLimit}
+        lowLimit={stats?.stock?.lowLimit}
+        criticalLimit={stats?.stock?.criticalLimit}
         onClose={() => setLowStockOpen(false)}
       />
     </div>

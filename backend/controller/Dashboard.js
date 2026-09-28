@@ -1,6 +1,8 @@
 const prisma = require("../config/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
+const { can } = require("../helper/Permissions");
+const { noticeScope, threadRelations } = require("../helper/Reminder_Thread");
 
 const { LOW_STOCK_LIMIT, CRITICAL_STOCK_LIMIT } = branch;
 const SOLD = { in: ["CONFIRMED", "COMPLETED"] };
@@ -32,6 +34,127 @@ async function salesOn(scope, range) {
 
 async function outletOf(req) {
   return (await branch.viewerOutlet(req.user)) ?? req.query.branchId;
+}
+
+const NOTICE_LIMIT = 10;
+const POPULAR_LIMIT = 5;
+const SCHEDULE_ORDER = { ON_BREAK: 0, ON_SHIFT: 1, DONE: 2, NOT_IN: 3 };
+
+async function popularItems(branchId) {
+  const soldToday = { branchId, status: SOLD, confirmedAt: dayRange() };
+  const [groups, totals] = await Promise.all([
+    prisma.salesOrderItem.groupBy({
+      by: ["menuItemId"],
+      where: { salesOrder: soldToday },
+      _sum: { quantity: true, lineTotal: true },
+      _count: { salesOrderId: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: POPULAR_LIMIT,
+    }),
+    prisma.salesOrderItem.aggregate({ where: { salesOrder: soldToday }, _sum: { quantity: true } }),
+  ]);
+  const items = await prisma.menuItem.findMany({
+    where: { id: { in: groups.map((group) => group.menuItemId) } },
+    select: { id: true, name: true, menuItemImage: true, menu: { select: { id: true, name: true } } },
+  });
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const rows = groups.map((group) => {
+    const item = byId.get(group.menuItemId);
+    return {
+      id: group.menuItemId,
+      name: item?.name ?? "Removed item",
+      image: item?.menuItemImage ?? null,
+      menu: item?.menu ?? null,
+      quantity: group._sum.quantity ?? 0,
+      revenue: Number(group._sum.lineTotal ?? 0),
+      orders: group._count.salesOrderId,
+    };
+  });
+  return { rows, soldToday: totals._sum.quantity ?? 0 };
+}
+
+const HQ_FIELDS = {
+  outlets: "dashboard.hq.outlets",
+  sales: "dashboard.hq.revenue",
+  orders: "dashboard.hq.orders",
+  staff: "dashboard.hq.employees",
+};
+
+const OUTLET_FIELDS = {
+  sales: "dashboard.outlet.sales",
+  orders: "dashboard.outlet.orders",
+  staff: "dashboard.outlet.staff",
+  stock: "dashboard.outlet.stock",
+};
+
+function permittedFields(viewer, data, fields) {
+  return Object.fromEntries(Object.entries(fields).filter(([, key]) => can(viewer, key)).map(([field]) => [field, data[field]]));
+}
+
+function scheduleState(shift) {
+  if (!shift) return "NOT_IN";
+  if (shift.status !== "ON_SHIFT") return "DONE";
+  return shift.breaks.some((item) => !item.endAt) ? "ON_BREAK" : "ON_SHIFT";
+}
+
+async function staffSchedule(branchId, viewer) {
+  const staffWhere = can(viewer, "shifts.manage") ? {} : { id: viewer.staffId ?? "" };
+  const staff = await prisma.staff.findMany({
+    where: { branchId, status: "ACTIVE", ...staffWhere },
+    select: { id: true, firstName: true, lastName: true, badgeNumber: true, designation: true },
+    orderBy: { firstName: "asc" },
+  });
+  const shifts = await prisma.staffShift.findMany({
+    where: {
+      staffId: { in: staff.map((member) => member.id) },
+      OR: [{ status: "ON_SHIFT" }, { clockInAt: dayRange() }],
+    },
+    select: {
+      id: true,
+      staffId: true,
+      status: true,
+      clockInAt: true,
+      clockOutAt: true,
+      breaks: { select: { startAt: true, endAt: true }, orderBy: { startAt: "asc" } },
+    },
+    orderBy: { clockInAt: "desc" },
+  });
+  const latest = new Map();
+  for (const shift of shifts) if (!latest.has(shift.staffId)) latest.set(shift.staffId, shift);
+
+  const rows = staff
+    .map((member) => {
+      const shift = latest.get(member.id) ?? null;
+      return { staff: member, state: scheduleState(shift), shift };
+    })
+    .sort((a, b) => SCHEDULE_ORDER[a.state] - SCHEDULE_ORDER[b.state]);
+  const summary = Object.fromEntries(Object.keys(SCHEDULE_ORDER).map((key) => [key, 0]));
+  rows.forEach((row) => (summary[row.state] += 1));
+  return { rows, summary };
+}
+
+const noticeSelect = {
+  id: true,
+  title: true,
+  notes: true,
+  dueAt: true,
+  priority: true,
+  status: true,
+  createdAt: true,
+  outlet: { select: { id: true, name: true } },
+  staff: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
+  acceptedAt: true,
+  ...threadRelations,
+};
+
+async function outletNotices(branchId) {
+  const where = { status: "OPEN", ...noticeScope(branchId) };
+  const [rows, total, overdue] = await Promise.all([
+    prisma.reminder.findMany({ where, select: noticeSelect, orderBy: { dueAt: "asc" }, take: NOTICE_LIMIT }),
+    prisma.reminder.count({ where }),
+    prisma.reminder.count({ where: { ...where, dueAt: { lt: new Date() } } }),
+  ]);
+  return { rows, total, overdue };
 }
 
 async function companyScope(req) {
@@ -299,7 +422,7 @@ class Dashboard {
     try {
       const scope = await companyScope(req);
       const [data, outlets] = await Promise.all([figures(scope), outletFigures(scope)]);
-      return response.success(res, { ...data, outlets }, "Company Dashboard Fetched Successfully");
+      return response.success(res, permittedFields(req.user, { ...data, outlets }, HQ_FIELDS), "Company Dashboard Fetched Successfully");
     } catch (error) {
       return branch.handleError(res, error, "Dashboard");
     }
@@ -339,7 +462,50 @@ class Dashboard {
         return response.error(res, "Select an outlet to see its dashboard!", 422);
       }
 
-      return response.success(res, await figures({ branchId }), "Outlet Dashboard Fetched Successfully");
+      const data = permittedFields(req.user, await figures({ branchId }), OUTLET_FIELDS);
+      return response.success(res, data, "Outlet Dashboard Fetched Successfully");
+    } catch (error) {
+      return branch.handleError(res, error, "Dashboard");
+    }
+  }
+
+  async popularItems(req, res) {
+    try {
+      const branchId = await outletOf(req);
+      if (!branchId) {
+        return response.error(res, "Select an outlet to see its popular items!", 422);
+      }
+
+      const { rows, soldToday } = await popularItems(branchId);
+      return res.status(200).json({ status: "success", message: "Popular Items Fetched Successfully", data: rows, soldToday });
+    } catch (error) {
+      return branch.handleError(res, error, "Dashboard");
+    }
+  }
+
+  async staffSchedule(req, res) {
+    try {
+      const branchId = await outletOf(req);
+      if (!branchId) {
+        return response.error(res, "Select an outlet to see its staff schedule!", 422);
+      }
+
+      const { rows, summary } = await staffSchedule(branchId, req.user);
+      return res.status(200).json({ status: "success", message: "Staff Schedule Fetched Successfully", data: rows, summary });
+    } catch (error) {
+      return branch.handleError(res, error, "Dashboard");
+    }
+  }
+
+  async notices(req, res) {
+    try {
+      const branchId = await outletOf(req);
+      if (!branchId) {
+        return response.error(res, "Select an outlet to see its notice board!", 422);
+      }
+
+      const { rows, total, overdue } = await outletNotices(branchId);
+      return res.status(200).json({ status: "success", message: "Notices Fetched Successfully", data: rows, total, overdue });
     } catch (error) {
       return branch.handleError(res, error, "Dashboard");
     }
@@ -348,3 +514,5 @@ class Dashboard {
 
 const dashboard = new Dashboard();
 module.exports = dashboard;
+module.exports.companyScope = companyScope;
+module.exports.dayRange = dayRange;

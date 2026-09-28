@@ -9,5 +9,7 @@ router.post("/start", requireAny("shifts.self", "shifts.manage"), shift.start);
 router.post("/end", requireAny("shifts.self", "shifts.manage"), shift.end);
 router.post("/break/start", requireAny("shifts.self", "shifts.manage"), shift.breaks.start);
 router.post("/break/end", requireAny("shifts.self", "shifts.manage"), shift.breaks.end);
+router.put("/:id", requirePermission("shifts.manage"), shift.update);
+router.delete("/:id", requirePermission("shifts.manage"), shift.remove);
 
 module.exports = router;

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { useAtom, useAtomValue } from "jotai";
 import { LuCoffee, LuLogIn, LuLogOut, LuPlay } from "react-icons/lu";
 import {
+  ActionComp,
   AnimateButton,
   CustomTable,
   CustomTooltip,
@@ -29,6 +30,7 @@ import {
 import { ShiftColumn } from "@/lib/TableData/Columns";
 import { shiftRefresh, userData } from "@/lib/Variables";
 import ClockInStaff from "./ClockInStaff";
+import ShiftEntry from "./ShiftEntry";
 import { breakMinutes, openBreakOf, workedMinutes } from "./shiftTime";
 
 const DEFAULT_PARAMS = {
@@ -56,10 +58,43 @@ function BreakList({ breaks }) {
   );
 }
 
-function ShiftActions({ onBreak, onToggleBreak, onEnd }) {
+function ShiftActions({
+  live,
+  onBreak,
+  onToggleBreak,
+  onEnd,
+  edit,
+  onEdit,
+  onDelete,
+}) {
   const breakLabel = onBreak ? "End break" : "Start break";
   return (
     <div className="shift-actions">
+      {live && (
+        <LiveActions
+          breakLabel={breakLabel}
+          onBreak={onBreak}
+          onToggleBreak={onToggleBreak}
+          onEnd={onEnd}
+        />
+      )}
+      {edit && (
+        <ActionComp
+          edit
+          editTitle="Edit shift"
+          editAction={onEdit}
+          remove
+          deleteTitle="Delete shift"
+          deleteAction={onDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+function LiveActions({ breakLabel, onBreak, onToggleBreak, onEnd }) {
+  return (
+    <>
       <CustomTooltip title={breakLabel}>
         <AnimateButton
           size="icon"
@@ -78,7 +113,7 @@ function ShiftActions({ onBreak, onToggleBreak, onEnd }) {
           onClick={onEnd}
         />
       </CustomTooltip>
-    </div>
+    </>
   );
 }
 
@@ -94,6 +129,7 @@ export default function ShiftList() {
   const canSelf = can("shifts.self");
   const canOthers = can("shifts.manage");
   const [clockInOpen, setClockInOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const { rows, offset, reload, params, ...table } = useTableList({
     url: API_LINK.Shift,
@@ -134,6 +170,18 @@ export default function ShiftList() {
               onSuccess: refresh,
             },
           ),
+      });
+
+    const deleteShift = (row) =>
+      confirm.remove({
+        title: "Delete Shift",
+        body: `Delete the shift of "${fullName(row.staff)}" on ${formatDate(row.clockInAt)} with its breaks? This cannot be undone.`,
+        label: "Delete Shift",
+        onConfirm: () =>
+          notify.submit(ApiService.delete(API_LINK.ShiftDetails(row.id)), {
+            errorText: "Failed to delete the shift",
+            onSuccess: refresh,
+          }),
       });
 
     const toggleBreak = (row, onBreak) =>
@@ -186,13 +234,18 @@ export default function ShiftList() {
         ) : (
           <StatusComp type={row.status} tone={open ? undefined : "muted"} />
         ),
-        action: canManage ? (
-          <ShiftActions
-            onBreak={onBreak}
-            onToggleBreak={() => toggleBreak(row, onBreak)}
-            onEnd={() => endShift(row)}
-          />
-        ) : null,
+        action:
+          canManage || canOthers ? (
+            <ShiftActions
+              live={canManage}
+              onBreak={onBreak}
+              onToggleBreak={() => toggleBreak(row, onBreak)}
+              onEnd={() => endShift(row)}
+              edit={canOthers}
+              onEdit={() => setEditing(row)}
+              onDelete={() => deleteShift(row)}
+            />
+          ) : null,
       };
     });
   }, [
@@ -209,8 +262,12 @@ export default function ShiftList() {
   return (
     <div className="page">
       <PageHeader
-        title="Shifts"
-        subtitle={`Staff clock-ins and shift history at ${scope.outletName ?? "this outlet"}`}
+        title={canOthers ? "Shifts" : "My Shifts"}
+        subtitle={
+          canOthers
+            ? `Staff clock-ins and shift history at ${scope.outletName ?? "this outlet"}`
+            : "Your shifts and breaks. Start and end them from the header."
+        }
         actions={
           canOthers && (
             <AnimateButton
@@ -239,9 +296,20 @@ export default function ShiftList() {
         searchPlaceholder="Search staff name or badge..."
         emptyText={
           params.status === "ON_SHIFT"
-            ? "Nobody is on shift right now"
+            ? canOthers
+              ? "Nobody is on shift right now"
+              : "You are not on shift right now"
             : "No shift has been recorded yet"
         }
+      />
+
+      <ShiftEntry
+        shift={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          setVersion((n) => n + 1);
+        }}
       />
 
       <ClockInStaff

@@ -19,6 +19,7 @@ router.use("/dashboard", authorization, require("./dashboard"));
 router.use("/shift", authorization, require("./shift"));
 router.use("/report", authorization, require("./report"));
 router.use("/role", authorization, require("./role"));
+router.use("/reminder", authorization, require("./reminder"));
 router.use("/upload", authorization, require("./upload"));
 
 router.use((req, res) => NOT_FOUND(res));

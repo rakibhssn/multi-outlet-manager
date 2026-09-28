@@ -698,6 +698,26 @@
   @apply flex justify-end gap-2;
 }
 
+.shift-break-editor {
+  @apply flex flex-col gap-3 rounded-md border p-3;
+}
+
+.shift-break-head {
+  @apply flex items-center justify-between gap-2;
+}
+
+.shift-break-title {
+  @apply text-sm font-medium;
+}
+
+.shift-break-empty {
+  @apply text-xs text-muted-foreground;
+}
+
+.shift-break-row {
+  @apply grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-3;
+}
+
 .account-box {
   @apply flex items-center gap-2.5 rounded-full border bg-card py-1 pr-3 pl-1 shadow-xs transition-shadow outline-none hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50;
 }
@@ -1182,12 +1202,206 @@ button.activity-item {
   @apply shrink-0 pt-0.5 text-xs whitespace-nowrap text-muted-foreground;
 }
 
+.reminders-box .view-box-body {
+  @apply flex flex-col gap-3;
+}
+.reminder-add {
+  @apply inline-flex items-center gap-1;
+}
+.reminder-add svg {
+  @apply size-3.5;
+}
+.reminder-filters {
+  @apply flex gap-1 rounded-md bg-muted/60 p-1;
+}
+.reminder-filter {
+  @apply flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors;
+}
+.reminder-filter-active {
+  @apply bg-background text-foreground shadow-sm;
+}
+.reminder-count {
+  @apply rounded-md bg-muted px-1.5 text-[10px] tabular-nums;
+}
+.reminder-list {
+  @apply flex max-h-[22rem] flex-col divide-y overflow-y-auto;
+}
+.reminder-row {
+  @apply grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 py-2.5;
+}
+.reminder-check {
+  @apply pt-0.5;
+}
+.reminder-body {
+  @apply flex min-w-0 flex-col gap-1;
+}
+.reminder-title {
+  @apply text-sm font-medium break-words;
+}
+.reminder-row-done .reminder-title {
+  @apply text-muted-foreground line-through;
+}
+.reminder-notes {
+  @apply line-clamp-2 text-xs text-muted-foreground;
+}
+.reminder-meta {
+  @apply flex flex-wrap items-center gap-1.5;
+}
+.reminder-due {
+  @apply text-xs font-medium tabular-nums;
+}
+.reminder-due-danger {
+  @apply text-destructive;
+}
+.reminder-due-warning {
+  @apply text-amber-600 dark:text-amber-400;
+}
+.reminder-due-info {
+  @apply text-primary;
+}
+.reminder-due-muted {
+  @apply text-muted-foreground;
+}
+.reminder-chip {
+  @apply inline-flex max-w-full items-center gap-1 truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground;
+}
+.reminder-chip svg {
+  @apply size-3 shrink-0;
+}
+.reminder-actions {
+  @apply shrink-0;
+}
+
+.reminder-thread {
+  @apply mt-1 flex flex-col gap-1.5 rounded-md bg-muted/50 p-2;
+}
+
+.reminder-accepted {
+  @apply inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400;
+}
+
+.reminder-accepted svg {
+  @apply size-3.5 shrink-0;
+}
+
+.reminder-reply {
+  @apply grid grid-cols-[auto_minmax(0,1fr)] gap-1.5;
+}
+
+.reminder-reply-icon {
+  @apply mt-0.5 size-3.5 text-muted-foreground;
+}
+
+.reminder-reply-body {
+  @apply flex min-w-0 flex-col;
+}
+
+.reminder-reply-text {
+  @apply text-xs break-words whitespace-pre-line;
+}
+
+.reminder-reply-meta {
+  @apply text-[11px] text-muted-foreground;
+}
+
+.alert-dialog {
+  @apply sm:max-w-2xl;
+}
+
+.alert-detail {
+  @apply flex flex-col gap-4;
+}
+
+.alert-guide {
+  @apply flex flex-col gap-1 rounded-md border-l-4 bg-muted/50 p-3 text-sm;
+}
+
+.alert-guide-critical {
+  @apply border-l-destructive;
+}
+
+.alert-guide-warning {
+  @apply border-l-amber-500;
+}
+
+.alert-guide-info {
+  @apply border-l-primary;
+}
+
+.alert-rows {
+  @apply flex max-h-[26rem] flex-col divide-y overflow-y-auto;
+}
+
+.alert-row {
+  @apply grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 px-1 py-2.5 text-left;
+}
+
+.alert-row-action {
+  @apply rounded-md transition-colors hover:bg-muted/60;
+}
+
+.alert-row-side {
+  @apply flex flex-col items-end gap-0.5 text-right;
+}
+
+.alert-reminder {
+  @apply flex flex-col gap-2;
+}
+
+.alert-reminder-notes {
+  @apply text-sm whitespace-pre-line text-muted-foreground;
+}
+
+.notice-actions {
+  @apply mt-1 flex flex-wrap gap-2;
+}
+
 .view-box-link {
   @apply text-xs font-semibold text-primary hover:underline;
 }
 
 .dashboard-empty {
   @apply grid h-48 place-items-center rounded-md border border-dashed text-sm text-muted-foreground;
+}
+
+.popular-list {
+  @apply flex flex-col divide-y;
+}
+
+.popular-row {
+  @apply grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-3 py-2.5;
+}
+
+.popular-rank {
+  @apply grid size-6 place-items-center rounded-md bg-muted text-xs font-semibold text-muted-foreground;
+}
+
+.popular-info {
+  @apply flex min-w-0 flex-col gap-1.5;
+}
+
+.popular-bar {
+  @apply block h-1.5 w-full overflow-hidden rounded-md bg-muted;
+}
+
+.popular-bar-fill {
+  @apply block h-full rounded-md bg-primary;
+}
+
+.popular-figures {
+  @apply flex flex-col items-end gap-0.5 text-right;
+}
+
+.popular-qty {
+  @apply text-sm font-semibold tabular-nums;
+}
+
+.schedule-list {
+  @apply flex max-h-[22rem] flex-col divide-y overflow-y-auto;
+}
+
+.schedule-row {
+  @apply flex items-center justify-between gap-3 py-2.5;
 }
 
 .today-list {

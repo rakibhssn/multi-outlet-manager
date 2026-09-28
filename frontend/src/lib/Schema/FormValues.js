@@ -85,3 +85,13 @@ export const PasswordChangeValues = {
   newPassword: "",
   confirmPassword: "",
 };
+
+export const ReminderValues = {
+  title: "",
+  notes: "",
+  dueDate: "",
+  dueTime: "09:00",
+  priority: "NORMAL",
+  outletId: "",
+  staffId: "",
+};
