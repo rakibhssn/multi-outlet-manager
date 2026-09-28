@@ -12,6 +12,9 @@ export const labelOf = (options, value) =>
 export const fullName = (person) =>
   person ? `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim() : "";
 
+export const personName = (account) =>
+  fullName(account?.staff) || account?.company?.name || account?.email || "";
+
 export const plural = (count, word) =>
   `${count} ${word}${count === 1 ? "" : "s"}`;
 

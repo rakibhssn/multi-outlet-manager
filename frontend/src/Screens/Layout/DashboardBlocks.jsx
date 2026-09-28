@@ -77,6 +77,21 @@ export function StatCard({
   );
 }
 
+export function DashboardRow({ className, children }) {
+  const items = React.Children.toArray(children);
+  if (!items.length) return null;
+  if (items.length === 1) return items[0];
+  return <div className={cn("dashboard-grid", className)}>{items}</div>;
+}
+
+export function DashboardEmpty() {
+  return (
+    <p className="dashboard-empty">
+      No dashboard cards are enabled for your role.
+    </p>
+  );
+}
+
 export function ViewBox({ title, actions, className, children }) {
   return (
     <section className={cn("view-box", className)}>

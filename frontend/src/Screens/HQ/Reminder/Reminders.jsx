@@ -11,6 +11,7 @@ import { API_LINK } from "@/lib/API_LINK";
 import { fullName } from "@/lib/Functions/Common";
 import { cn } from "@/lib/utils";
 import ReminderEntry from "./ReminderEntry";
+import ReminderThread from "./ReminderThread";
 import { dueLabel } from "./reminderTime";
 
 const FILTERS = [
@@ -60,6 +61,7 @@ function ReminderRow({ reminder, can, onToggle, onEdit, onDelete }) {
             </span>
           )}
         </div>
+        <ReminderThread reminder={reminder} />
       </div>
       <ActionComp
         className="reminder-actions"

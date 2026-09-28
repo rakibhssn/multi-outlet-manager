@@ -25,6 +25,32 @@ const PERMISSION_GROUPS = [
     permissions: [{ key: "dashboard.view", label: "View", kind: "page" }],
   },
   {
+    label: "HQ dashboard",
+    permissions: [
+      { key: "dashboard.hq.outlets", label: "Outlets card", kind: "action", hq: true },
+      { key: "dashboard.hq.revenue", label: "Revenue card", kind: "action", hq: true },
+      { key: "dashboard.hq.orders", label: "Orders card", kind: "action", hq: true },
+      { key: "dashboard.hq.employees", label: "Employees card", kind: "action", hq: true },
+      { key: "dashboard.hq.performance", label: "Outlet performance", kind: "action", hq: true },
+      { key: "dashboard.hq.activity", label: "Recent activity", kind: "action", hq: true },
+      { key: "dashboard.hq.alerts", label: "Alerts", kind: "action", hq: true },
+    ],
+  },
+  {
+    label: "Outlet dashboard",
+    permissions: [
+      { key: "dashboard.outlet.sales", label: "Today's sales card", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.orders", label: "Total orders card", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.staff", label: "Staff on shift card", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.stock", label: "Low stock card", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.sales_today", label: "Sales today", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.live_orders", label: "Live orders", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.notices", label: "Notice board", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.popular", label: "Popular items", kind: "action", parent: "dashboard.view" },
+      { key: "dashboard.outlet.schedule", label: "Staff schedule", kind: "action", parent: "dashboard.view" },
+    ],
+  },
+  {
     label: "Companies",
     permissions: [
       { key: "companies.view", label: "View", kind: "page", hq: true },
@@ -110,6 +136,7 @@ const PERMISSION_GROUPS = [
       { key: "reminders.create", label: "Create", kind: "action", hq: true },
       { key: "reminders.edit", label: "Edit & mark done", kind: "action", hq: true },
       { key: "reminders.delete", label: "Delete", kind: "action", hq: true },
+      { key: "reminders.reply", label: "Reply & accept notices", kind: "action" },
     ],
   },
   {
@@ -126,6 +153,10 @@ const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) =>
 );
 const ALL_PERMISSION_KEYS = ALL_PERMISSIONS.map((permission) => permission.key);
 const HQ_ONLY_PERMISSIONS = ALL_PERMISSIONS.filter((permission) => permission.hq).map((permission) => permission.key);
+
+const OUTLET_DASHBOARD_CARDS = PERMISSION_GROUPS.find((group) => group.label === "Outlet dashboard").permissions.map(
+  (permission) => permission.key,
+);
 
 const REPORT_PERMISSIONS = [
   "reports.sales",
@@ -156,6 +187,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
     "orders.complete",
     "orders.cancel",
     "shifts.manage",
+    "reminders.reply",
+    ...OUTLET_DASHBOARD_CARDS,
     ...OUTLET_REPORTS,
   ],
   MANAGER: [
@@ -165,9 +198,20 @@ const DEFAULT_ROLE_PERMISSIONS = {
     "orders.cancel",
     "shifts.self",
     "shifts.manage",
+    "reminders.reply",
+    ...OUTLET_DASHBOARD_CARDS,
     ...OUTLET_REPORTS,
   ],
-  USER: [...OUTLET_BASE, "orders.complete", "shifts.self"],
+  USER: [
+    ...OUTLET_BASE,
+    "orders.complete",
+    "shifts.self",
+    "dashboard.outlet.stock",
+    "dashboard.outlet.live_orders",
+    "dashboard.outlet.notices",
+    "dashboard.outlet.popular",
+    "dashboard.outlet.schedule",
+  ],
 };
 
 const DEFAULT_NEW_ROLE_PERMISSIONS = ["dashboard.view", "menus.view", "items.view", "orders.view"];
@@ -200,6 +244,7 @@ module.exports = {
   ALL_PERMISSIONS,
   ALL_PERMISSION_KEYS,
   HQ_ONLY_PERMISSIONS,
+  OUTLET_DASHBOARD_CARDS,
   DEFAULT_ROLE_PERMISSIONS,
   DEFAULT_NEW_ROLE_PERMISSIONS,
   sanitizePermissions,

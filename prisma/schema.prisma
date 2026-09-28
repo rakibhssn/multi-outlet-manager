@@ -112,6 +112,8 @@ model User {
   breaksEnded       StaffShiftBreak[] @relation("BreakEndedBy")
   sessions          UserSession[]
   reminders         Reminder[]
+  acceptedReminders Reminder[]        @relation("ReminderAcceptedBy")
+  reminderReplies   ReminderReply[]
 }
 
 model Company {
@@ -384,23 +386,40 @@ model UserSession {
 }
 
 model Reminder {
-  id          String            @id @default(cuid())
-  companyId   String
-  outletId    String?
-  staffId     String?
-  createdById String?
-  title       String
-  notes       String?
-  dueAt       DateTime
-  priority    REMINDER_PRIORITY @default(NORMAL)
-  status      REMINDER_STATUS   @default(OPEN)
-  completedAt DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  company     Company           @relation("CompanyReminders", fields: [companyId], references: [id], onDelete: Cascade)
-  outlet      Company?          @relation("OutletReminders", fields: [outletId], references: [id], onDelete: SetNull)
-  staff       Staff?            @relation(fields: [staffId], references: [id], onDelete: SetNull)
-  createdBy   User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  id           String            @id @default(cuid())
+  companyId    String
+  outletId     String?
+  staffId      String?
+  createdById  String?
+  title        String
+  notes        String?
+  dueAt        DateTime
+  priority     REMINDER_PRIORITY @default(NORMAL)
+  status       REMINDER_STATUS   @default(OPEN)
+  completedAt  DateTime?
+  acceptedAt   DateTime?
+  acceptedById String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  company      Company           @relation("CompanyReminders", fields: [companyId], references: [id], onDelete: Cascade)
+  outlet       Company?          @relation("OutletReminders", fields: [outletId], references: [id], onDelete: SetNull)
+  staff        Staff?            @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdBy    User?             @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  acceptedBy   User?             @relation("ReminderAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  replies      ReminderReply[]
 
   @@index([companyId, status, dueAt])
+}
+
+model ReminderReply {
+  id         String   @id @default(cuid())
+  reminderId String
+  authorId   String?
+  message    String?
+  accepted   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  reminder   Reminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([reminderId, createdAt])
 }

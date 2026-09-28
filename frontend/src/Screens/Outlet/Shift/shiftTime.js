@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { minutesBetween } from "@/lib/Functions/Common";
 
 export const openBreakOf = (shift) =>
@@ -14,3 +15,13 @@ export const workedMinutes = (shift) =>
     minutesBetween(shift.clockInAt, shift.clockOutAt) - breakMinutes(shift),
     0,
   );
+
+export const toClock = (value) =>
+  value ? format(new Date(value), "HH:mm") : "";
+
+export function atTime(date, time, after) {
+  if (!date || !time) return null;
+  const moment = new Date(`${date}T${time}`);
+  if (after && moment <= after) moment.setDate(moment.getDate() + 1);
+  return moment;
+}

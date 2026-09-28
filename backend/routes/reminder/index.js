@@ -8,5 +8,6 @@ router.post("/", requirePermission("reminders.create"), reminder.create);
 router.put("/:id", requirePermission("reminders.edit"), reminder.update);
 router.patch("/:id/done", requirePermission("reminders.edit"), reminder.setDone);
 router.delete("/:id", requirePermission("reminders.delete"), reminder.remove);
+router.post("/:id/replies", requirePermission("reminders.reply"), reminder.reply);
 
 module.exports = router;

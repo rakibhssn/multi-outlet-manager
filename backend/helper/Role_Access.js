@@ -19,6 +19,8 @@ const roleAccessSelect = { id: true, key: true, name: true, status: true, permis
 const invalidRole = (message) => Object.assign(new Error(message), { status: 422 });
 
 async function syncPermissions() {
+  const existing = await prisma.permission.findMany({ select: { slug: true } });
+  const known = new Set(existing.map((permission) => permission.slug));
   for (const permission of ALL_PERMISSIONS) {
     const data = { name: `${permission.group} · ${permission.label}`, description: permission.kind, status: "ACTIVE" };
     await prisma.permission.upsert({
@@ -31,6 +33,39 @@ async function syncPermissions() {
     where: { slug: { notIn: ALL_PERMISSION_KEYS } },
     data: { status: "INACTIVE" },
   });
+  return known.size ? ALL_PERMISSIONS.filter((permission) => !known.has(permission.key)) : [];
+}
+
+async function grantPermissions(roleIds, keys) {
+  if (!roleIds.length || !keys.length) return;
+  const permissions = await prisma.permission.findMany({ where: { slug: { in: keys } }, select: { id: true } });
+  await prisma.permissionBatch.createMany({
+    data: roleIds.flatMap((roleId) => permissions.map((permission) => ({ roleId, permissionId: permission.id }))),
+    skipDuplicates: true,
+  });
+}
+
+async function grantNewDefaults(role, added) {
+  const defaults = DEFAULT_ROLE_PERMISSIONS[role.key] ?? [];
+  await grantPermissions([role.id], added.map((permission) => permission.key).filter((key) => defaults.includes(key)));
+}
+
+async function grantNewToHolders(added) {
+  const byParent = new Map();
+  for (const permission of added.filter((item) => item.parent)) {
+    byParent.set(permission.parent, [...(byParent.get(permission.parent) ?? []), permission.key]);
+  }
+  for (const [parent, keys] of byParent) {
+    const roles = await prisma.role.findMany({
+      where: {
+        isSystem: false,
+        key: { notIn: Object.keys(DEFAULT_ROLE_PERMISSIONS) },
+        permissionBatches: { some: { permission: { slug: parent } } },
+      },
+      select: { id: true },
+    });
+    await grantPermissions(roles.map((role) => role.id), keys);
+  }
 }
 
 async function seedDefaults(role) {
@@ -44,15 +79,19 @@ async function seedDefaults(role) {
 }
 
 async function syncRoles() {
-  await syncPermissions();
+  const added = await syncPermissions();
   for (const { key, name, description, isSystem = false } of SYSTEM_ROLES) {
     const role = await prisma.role.upsert({
       where: { key },
       create: { key, name, description, isSystem },
       update: { isSystem, companyId: null },
     });
-    if (!isSystem) await seedDefaults(role);
+    if (!isSystem) {
+      await seedDefaults(role);
+      await grantNewDefaults(role, added);
+    }
   }
+  await grantNewToHolders(added);
 }
 
 function accessOf(role) {

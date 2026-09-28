@@ -8,9 +8,13 @@ A food and beverage management system for a company that runs several outlets. H
 - **Staff** — staff profiles with login accounts, transfers between outlets with a recorded work history.
 - **Menus and menu items** — price history per item, per-outlet price overrides and stock.
 - **Sales orders** — a point-of-sale screen to take dine-in, takeaway and delivery orders from stocked items. Confirming deducts stock, cancelling restores it, and every order has a printable and downloadable order slip.
-- **Shifts and breaks** — staff clock in and out, take breaks, and outlets can manage any of their staff's shifts.
-- **Outlet dashboard** — today's sales and orders compared with yesterday, staff on shift and low stock items.
+- **Shifts and breaks** — staff clock in and out and take breaks from the header. Each staff member gets one shift per day. Outlet Admin and Manager accounts start, end, pause, edit and delete any staff member's shift from the Shifts page; other roles see only their own shifts there.
+- **Headquarter dashboard** — live alerts (stock, late and cancelled orders, long shifts and breaks, overdue reminders, outlet replies, outlets with no sales by noon), company-wide figures, today's orders and revenue per outlet compared with yesterday, a 7-day revenue trend per outlet and recent order and shift activity.
+- **Outlet dashboard** — today's sales and orders compared with yesterday, staff on shift, low stock items, today's sales and live orders, a notice board of open headquarter reminders for the outlet or its staff, today's popular items and a live staff schedule.
 - **Reports** — sales, item sales, server performance, staff shifts, attendance and stock for each outlet, with print, CSV and PDF download.
+- **Reminders** — headquarters creates reminders with a due date, priority and an optional outlet and staff mention, and marks them done. Outlet Admin and Manager accounts reply to them from the outlet notice board and accept the task; headquarters sees who accepted and every reply.
+- **Roles and permissions** — built-in and company roles with per-page and per-action permissions (see below).
+- **My Account** — profile, password change and sign-out of other sessions.
 
 ## Account types
 
@@ -38,6 +42,8 @@ Every login holds exactly one role (`User.roleId` → `Role`). The role decides 
 - **Shared and company roles.** Shared roles are used by every company, so only the developer account edits them or creates new shared roles. A headquarter account creates **company roles** (for example "Cashier") that only its outlets and staff can be given.
 - **Headquarter-only permissions** (companies, outlets, stock, staff transfer and history, menu and item editing, and roles) belong to Super Admin only and are not offered on other roles.
 - **Roles screen** (`/hq/roles`): pick a role on the left, then edit its name, description, status and permissions on the right. A new role starts with read-only access. A role can be deleted only when nobody holds it.
+- **Dashboard cards.** Each dashboard card and box is its own permission, in the "HQ dashboard" and "Outlet dashboard" groups, on top of `dashboard.view`. A user sees only the cards their role holds, and the API refuses the data behind the others. Super Admin sees every card. Outlet Admin and Manager get every outlet card by default; Staff gets low stock, live orders, notice board, popular items and staff schedule.
+- **New permissions on existing databases.** When a new permission first appears, the startup sync gives it to the built-in roles whose defaults include it, and each outlet dashboard card to every custom role that already holds `dashboard.view`, so existing roles keep what they could see.
 - The backend syncs the catalogue and the built-in roles on every start. Run it manually with `npm run seed:roles`.
 
 ## Sessions and sign-out
@@ -59,6 +65,8 @@ Every login holds exactly one role (`User.roleId` → `Role`). The role decides 
 
 - Node.js 20 or newer
 - A PostgreSQL database (the project uses Prisma Postgres)
+
+Or only Docker with Docker Compose — see [Run with Docker](#run-with-docker).
 
 ### Install
 
@@ -83,6 +91,15 @@ Create `.env` in the project root:
 | `AUTH_SECRET`        | Not used by the current code; safe to remove                                               |
 | `AUTH_SEED_EMAIL`    | Email of the first developer account created by the seed                                   |
 | `AUTH_SEED_PASSWORD` | Password of that account                                                                   |
+| `TRUST_PROXY`        | Optional. Express `trust proxy` value; set to `1` when the API runs behind a reverse proxy |
+
+Optional seed values for the headquarter company the seed creates: `AUTH_SEED_COMPANY_NAME`, `AUTH_SEED_CONTACT_NAME`, `AUTH_SEED_CONTACT_EMAIL`, `AUTH_SEED_CONTACT_PHONE`, `AUTH_SEED_ADDRESS`, `AUTH_SEED_CITY`, `AUTH_SEED_STATE`, `AUTH_SEED_ZIP` and `AUTH_SEED_COUNTRY`. Each has a default in `prisma/auth_seed.js`.
+
+The frontend reads one optional variable from `frontend/.env`:
+
+| Variable            | Purpose                                                                    |
+| ------------------- | -------------------------------------------------------------------------- |
+| `REACT_APP_API_URL` | API base URL (default `http://localhost:3050/api/v1/`). Read at build time |
 
 ### Database
 
@@ -101,6 +118,28 @@ npm start
 
 This starts the backend on `http://localhost:3050` and the frontend on `http://localhost:3000`. Run them separately with `npm run backend` and `npm run frontend`.
 
+### Run with Docker
+
+`docker-compose.yml` runs three containers:
+
+| Service    | Image                                               | Port                           |
+| ---------- | --------------------------------------------------- | ------------------------------ |
+| `db`       | PostgreSQL 17                                       | `5433` on the host (`DB_PORT`) |
+| `backend`  | `backend/Dockerfile` (Node.js 24)                   | `3050` (`API_PORT`)            |
+| `frontend` | `frontend/Dockerfile` (React build served by nginx) | `3000` (`UI_PORT`)             |
+
+```bash
+docker compose up -d --build
+docker compose exec backend npm run seed:auth
+```
+
+Open `http://localhost:3000`. nginx serves the UI and forwards `/api/` and `/uploads/` to the backend, so the UI calls the API at `/api/v1/` on the same origin.
+
+- The backend applies pending migrations (`prisma migrate deploy`) on every start, then starts the server.
+- Compose reads `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `AUTH_SEED_EMAIL` and `AUTH_SEED_PASSWORD` from the root `.env`. It refuses to start without the two JWT secrets.
+- Compose ignores `DATABASE_URL` in `.env` and connects to its own `db` container. Its credentials come from `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` (defaults `outlet` / `outlet` / `outlet_manager`); change them before deploying anywhere real.
+- Database data lives in the `db-data` volume and uploaded images in the `uploads` volume, so both survive rebuilds. `docker compose down -v` deletes them.
+
 ## Scripts
 
 | Script                    | What it does                                                                 |
@@ -118,29 +157,48 @@ This starts the backend on `http://localhost:3050` and the frontend on `http://l
 
 ```
 backend/
-  server.js            Express app, CORS, rate limit, static uploads
+  server.js            Express app, security headers, CORS, rate limit, static uploads, error handler
   routes/              One folder per resource, mounted in routes/index.js
   controller/          Request handlers and business rules
-  helper/              Auth middleware
+  helper/              Auth middleware, permissions, role sync, sessions, access log, health check, shutdown
   config/prisma.js     Prisma client
+  uploads/             Uploaded images, one folder per type (not committed)
+  Dockerfile           Backend image
 prisma/
   schema.prisma        Database schema
   migrations/          SQL migrations
+  auth_seed.js         First headquarter company and developer account
+  role_seed.js         Permission and role sync
 frontend/src/
   Router/              HQ and outlet routes
-  Screens/             Pages (HQ, Outlet, Sales, Report, Auth, Layout)
+  Screens/             Pages (HQ, Outlet, Sales, Report, Account, Auth, Layout)
   components/          ui (shadcn primitives) and custom (form fields, table, dialogs)
   hooks/               Shared hooks (table lists, notifications, options, shifts)
   lib/                 API client, constants, helpers, PDF and CSV export
+frontend/
+  Dockerfile           Frontend build and nginx image
+  nginx.conf           Serves the UI, proxies /api and /uploads to the backend
 scripts/
   generate-readme.js   Builds the API and package sections below
+docker-compose.yml     Database, backend and frontend containers
 ```
 
 ## Architecture
 
 The application is a modular monolith: one Express 5 backend serves the REST API, and one React frontend calls it. Backend routes map API paths to controllers; controllers apply business rules and use the shared Prisma client to access PostgreSQL. Authentication and authorization helpers enforce account, outlet and role permissions. The frontend contains separate headquarters and outlet workflows, with shared components and API utilities.
 
-PostgreSQL is the source of truth for operational data. Order creation and stock deduction run together in a database transaction. Uploaded images are currently stored and served from the backend's local `uploads/` directory. The backend currently starts as one Node.js process; the README's setup does not configure a load balancer, shared file storage or distributed rate limiting.
+A request passes through these layers in `backend/server.js`, in order:
+
+1. Access log, security headers (Helmet), CORS, gzip compression and a 50 KB JSON body limit.
+2. `/uploads` static files and `GET /health`, both before the rate limiter.
+3. Rate limit: 100 requests per 15 minutes per client IP.
+4. `/api/v1` routes. Protected routes run the auth middleware, which checks the access token and its session and loads the account's role and permissions from the database. Permission guards then decide whether the route may run.
+5. The controller. It validates the body and runs its Prisma queries. Its errors go to `handleError` in `backend/controller/Branch.js`, which turns database errors into readable responses (duplicate value 409, not found 404, linked record 409).
+6. A 404 fallback for unknown endpoints, then a global error handler for anything left over (too-large or invalid JSON bodies, other 4xx errors, and a generic 500 that hides internal details).
+
+PostgreSQL is the source of truth for operational data. Order creation and stock deduction run together in a database transaction. Uploaded images are stored and served from the backend's local `uploads/` directory. On start, the backend syncs the permission catalogue and built-in roles, and on `SIGTERM`/`SIGINT` it stops taking new connections, lets open requests finish (up to 10 seconds) and closes the database connection. An uncaught exception or unhandled promise rejection is logged and shuts the process down the same way.
+
+With Docker, nginx in the frontend container is the single entry point: it serves the built UI and proxies `/api/` and `/uploads/` to one backend container, which talks to one PostgreSQL container. The backend runs with `TRUST_PROXY=1` so the rate limit and session IPs use the real client IP instead of nginx's. There is no load balancer, shared file storage or distributed rate limiting yet.
 
 ## Schema overview
 
@@ -150,7 +208,22 @@ The Prisma schema is in `prisma/schema.prisma`; migrations in `prisma/migrations
 - **Staff operations:** `Staff` belongs to an outlet. `StaffAssignment` records outlet assignments over time; `StaffShift` and `StaffShiftBreak` record attendance and breaks.
 - **Menus and inventory:** `Menu` contains `MenuItem` records. `MenuItemOutlet` assigns an item to an outlet with outlet-specific stock and optional price. `MenuItemPrice` stores menu-item pricing history.
 - **Sales:** `SalesOrder` belongs to an outlet and server, and `SalesOrderItem` stores the purchased item, name, price and quantity at order time. Order items retain a price/name snapshot so later menu changes do not rewrite historical sales. Orders are unique by outlet and order number.
-- **Reminders:** `Reminder` belongs to a company and may optionally reference an outlet, staff member and creator.
+- **Reminders:** `Reminder` belongs to a company and may optionally reference an outlet, staff member and creator. `ReminderReply` holds outlet replies; a reply with `accepted` also sets `Reminder.acceptedAt` and `acceptedById`.
+
+Key enums drive the workflows:
+
+| Enum                | Values                                                 | Meaning                                                    |
+| ------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| `ACCOUNT_TYPE`      | `DEVELOPER`, `HEADQUARTER`, `OUTLET`, `OUTLET_STAFF`   | What a login can see (see [Account types](#account-types)) |
+| `ORDER_STATUS`      | `CONFIRMED`, `COMPLETED`, `CANCELLED`                  | A new order is confirmed; cancelling restores its stock    |
+| `ORDER_TYPE`        | `DINE_IN`, `TAKEAWAY`, `DELIVERY`                      | How the order is served                                    |
+| `ITEM_STATUS`       | `AVAILABLE`, `UNAVAILABLE`, `SOLD_OUT`, `DISCONTINUED` | Whether a menu item can be sold                            |
+| `SHIFT_STATUS`      | `ON_SHIFT`, `COMPLETED`, `ABSENCE`                     | State of a staff shift                                     |
+| `REMINDER_STATUS`   | `OPEN`, `DONE`                                         | Reminder progress                                          |
+| `REMINDER_PRIORITY` | `LOW`, `NORMAL`, `HIGH`                                | Reminder priority                                          |
+| `STATUS`            | `ACTIVE`, `INACTIVE`                                   | Shared on/off state for companies, outlets, menus and more |
+
+Staff profiles also use `STAFF_STATUS` (their designation, such as `CASHIER` or `CHEF`), `EMPLOYMENT_TYPE` and `SALARY_TYPE`.
 
 The schema uses foreign keys and unique constraints for relational integrity. Existing indexes are declared on the relevant Prisma models; add further indexes only after checking the actual query patterns and PostgreSQL query plans.
 
@@ -181,14 +254,14 @@ The current setup is intended as a single backend process and PostgreSQL databas
 1. **Measure first.** Load-test concurrent order creation, stock contention, order lists and reports. Monitor API latency/errors, database CPU and I/O, connection usage, and slow queries.
 2. **Tune PostgreSQL.** Keep a single primary database initially. Use `EXPLAIN ANALYZE` on common outlet/date/status queries before adding composite indexes. Increase database capacity or use connection pooling when measurements show those are bottlenecks. Preserve transactional order and inventory updates.
 3. **Keep reports bounded.** Aggregate sales in PostgreSQL rather than loading every matching order into the Node.js process. For reports that remain expensive, introduce precomputed daily summaries or run large exports as background jobs. Read replicas are a later option for read-heavy reporting where a small amount of replication lag is acceptable.
-4. **Scale the backend horizontally when needed.** Multiple stateless backend instances can sit behind a load balancer. Before doing so, move uploaded files to shared object storage and replace the in-memory rate-limit store with a shared store so instances see the same limits. Ensure session and other shared state do not depend on one process's memory.
+4. **Scale the backend horizontally when needed.** Multiple stateless backend instances can sit behind a load balancer. Before doing so, move uploaded files to shared object storage and replace the in-memory rate-limit store with a shared store so instances see the same limits. Sessions already live in the `UserSession` table and permissions are read from the database on each request, so neither depends on one process's memory. With Docker, this means running several `backend` replicas behind nginx (or another load balancer) instead of one container, and removing the fixed host port on `backend`.
 5. **Defer major splits.** Keep the modular monolith unless measurement or independent operational requirements justify a separate reporting service, partitioning, or sharding. Those options add deployment and data-consistency complexity and are not an initial requirement for this target.
 
 ## API
 
 <!-- API:START -->
 
-Base URL: `http://localhost:3050/api/v1` · 74 endpoints · generated from `backend/routes`.
+Base URL: `http://localhost:3050/api/v1` · 82 endpoints · generated from `backend/routes`.
 
 Protected endpoints need the header `Authorization: Bearer <accessToken>` from `POST /auth/login`.
 
@@ -285,25 +358,32 @@ Protected endpoints need the header `Authorization: Bearer <accessToken>` from `
 
 ### Dashboard
 
-| Method | Endpoint                             | Auth | Description                                                                              |
-| ------ | ------------------------------------ | ---- | ---------------------------------------------------------------------------------------- |
-| `GET`  | `/api/v1/dashboard/company`          | Yes  | Headquarter dashboard figures across its outlets (developers may pass companyId)         |
-| `GET`  | `/api/v1/dashboard/company/outlets`  | Yes  | Today's orders, items and revenue per outlet compared with yesterday                     |
-| `GET`  | `/api/v1/dashboard/company/activity` | Yes  | Latest order and shift events across the company's outlets (last 48 hours)               |
-| `GET`  | `/api/v1/dashboard/company/trend`    | Yes  | Daily revenue per outlet for the last 7 days (up to 8 lines, the rest folded into Other) |
-| `GET`  | `/api/v1/dashboard/outlet`           | Yes  | Outlet dashboard figures: sales, orders, staff on shift, low stock                       |
-| `GET`  | `/api/v1/dashboard/outlet/low-stock` | Yes  | Items at or below the low stock limit, lowest first                                      |
+| Method | Endpoint                                  | Auth | Description                                                                                                                                                                                                       |
+| ------ | ----------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/dashboard/company`               | Yes  | Headquarter dashboard figures across its outlets (developers may pass companyId)                                                                                                                                  |
+| `GET`  | `/api/v1/dashboard/company/outlets`       | Yes  | Today's orders, items and revenue per outlet compared with yesterday                                                                                                                                              |
+| `GET`  | `/api/v1/dashboard/company/activity`      | Yes  | Latest order and shift events across the company's outlets (last 48 hours)                                                                                                                                        |
+| `GET`  | `/api/v1/dashboard/company/trend`         | Yes  | Daily revenue per outlet for the last 7 days (up to 8 lines, the rest folded into Other)                                                                                                                          |
+| `GET`  | `/api/v1/dashboard/company/alerts`        | Yes  | Live alerts across the company's outlets (stock, late and cancelled orders, long shifts and breaks, overdue reminders, outlet replies, no sales by noon), most severe first                                       |
+| `GET`  | `/api/v1/dashboard/company/alerts/:type`  | Yes  | Records behind one alert: `outletId` for stock, order, shift, break and no-sales alerts (items, orders, shifts, breaks or outlet status); `ref` (reminder id) for reminder alerts (the reminder with its replies) |
+| `GET`  | `/api/v1/dashboard/outlet`                | Yes  | Outlet dashboard figures: sales, orders, staff on shift, low stock                                                                                                                                                |
+| `GET`  | `/api/v1/dashboard/outlet/low-stock`      | Yes  | Items at or below the low stock limit, lowest first                                                                                                                                                               |
+| `GET`  | `/api/v1/dashboard/outlet/notices`        | Yes  | Notice board: open headquarter reminders for the outlet or its staff, soonest due first, with open and overdue counts                                                                                             |
+| `GET`  | `/api/v1/dashboard/outlet/popular-items`  | Yes  | Today's top 5 items by quantity sold (confirmed and completed orders) with revenue, plus total items sold today                                                                                                   |
+| `GET`  | `/api/v1/dashboard/outlet/staff-schedule` | Yes  | Every active staff member's shift state today (on shift, on break, done, not in); without shifts.manage only the account's own row                                                                                |
 
 ### Shift
 
-| Method | Endpoint                    | Auth | Description                                                  |
-| ------ | --------------------------- | ---- | ------------------------------------------------------------ |
-| `GET`  | `/api/v1/shift`             | Yes  | Shift history with breaks                                    |
-| `GET`  | `/api/v1/shift/me`          | Yes  | Current shift of the logged-in staff member                  |
-| `POST` | `/api/v1/shift/start`       | Yes  | Clock in (staff for themselves, outlet for any of its staff) |
-| `POST` | `/api/v1/shift/end`         | Yes  | Clock out, closing any open break                            |
-| `POST` | `/api/v1/shift/break/start` | Yes  | Start a break during an open shift                           |
-| `POST` | `/api/v1/shift/break/end`   | Yes  | End the current break                                        |
+| Method   | Endpoint                    | Auth | Description                                                                                                  |
+| -------- | --------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/v1/shift`             | Yes  | Shift history with breaks (without shifts.manage, only the account's own shifts)                             |
+| `GET`    | `/api/v1/shift/me`          | Yes  | Current shift of the logged-in staff member                                                                  |
+| `POST`   | `/api/v1/shift/start`       | Yes  | Clock in (staff for themselves, outlet for any of its staff); one shift per staff per day                    |
+| `POST`   | `/api/v1/shift/end`         | Yes  | Clock out, closing any open break                                                                            |
+| `POST`   | `/api/v1/shift/break/start` | Yes  | Start a break during an open shift                                                                           |
+| `POST`   | `/api/v1/shift/break/end`   | Yes  | End the current break                                                                                        |
+| `PUT`    | `/api/v1/shift/:id`         | Yes  | Correct a shift's clock in, clock out, breaks and note (shifts.manage); setting clock out ends an open shift |
+| `DELETE` | `/api/v1/shift/:id`         | Yes  | Delete a shift and its breaks (shifts.manage)                                                                |
 
 ### Report
 
@@ -323,13 +403,14 @@ Protected endpoints need the header `Authorization: Bearer <accessToken>` from `
 
 ### Reminder
 
-| Method   | Endpoint                    | Auth | Description                                                                                                  |
-| -------- | --------------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
-| `GET`    | `/api/v1/reminder`          | Yes  | Company reminders (`status` = OPEN, DONE or all) with open, overdue and done counts                          |
-| `POST`   | `/api/v1/reminder`          | Yes  | Create a reminder with a title, notes, due date and time, priority, and an optional outlet and staff mention |
-| `PUT`    | `/api/v1/reminder/:id`      | Yes  | Edit a reminder                                                                                              |
-| `PATCH`  | `/api/v1/reminder/:id/done` | Yes  | Mark a reminder done (`done: false` reopens it)                                                              |
-| `DELETE` | `/api/v1/reminder/:id`      | Yes  | Delete a reminder                                                                                            |
+| Method   | Endpoint                       | Auth | Description                                                                                                                                 |
+| -------- | ------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/reminder`             | Yes  | Company reminders (`status` = OPEN, DONE or all) with open, overdue and done counts                                                         |
+| `POST`   | `/api/v1/reminder`             | Yes  | Create a reminder with a title, notes, due date and time, priority, and an optional outlet and staff mention                                |
+| `PUT`    | `/api/v1/reminder/:id`         | Yes  | Edit a reminder                                                                                                                             |
+| `PATCH`  | `/api/v1/reminder/:id/done`    | Yes  | Mark a reminder done (`done: false` reopens it)                                                                                             |
+| `DELETE` | `/api/v1/reminder/:id`         | Yes  | Delete a reminder                                                                                                                           |
+| `POST`   | `/api/v1/reminder/:id/replies` | Yes  | Outlet reply to an open notice for its outlet or staff (`message`); `accept: true` confirms the outlet takes on the task, once per reminder |
 
 ### Upload
 

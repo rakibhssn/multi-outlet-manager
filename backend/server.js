@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -27,7 +27,11 @@ const limiter = expressLimit({
 
 const app = express();
 app.disable("x-powered-by");
-if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+if (process.env.TRUST_PROXY)
+  app.set(
+    "trust proxy",
+    Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY,
+  );
 app.use(accessLog);
 app.use(
   helmet({

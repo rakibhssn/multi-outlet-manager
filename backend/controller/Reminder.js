@@ -1,6 +1,7 @@
 const prisma = require("../config/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
+const { addReply, threadRelations } = require("../helper/Reminder_Thread");
 
 const TITLE_LIMIT = 120;
 const NOTES_LIMIT = 1000;
@@ -11,6 +12,7 @@ const reminderInclude = {
   outlet: { select: { id: true, name: true } },
   staff: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
   createdBy: { select: { id: true, email: true } },
+  ...threadRelations,
 };
 
 const fail = (message, status = 422) => Object.assign(new Error(message), { status });
@@ -167,6 +169,18 @@ class Reminder {
       return response.updateSuccess(res, reminder, done ? "Reminder Marked Done" : "Reminder Reopened");
     } catch (error) {
       return branch.handleError(res, error, "Reminder");
+    }
+  }
+
+  async reply(req, res) {
+    try {
+      const branchId = await branch.viewerOutlet(req.user);
+      if (!branchId) throw fail("Only outlet accounts can reply to notices!", 403);
+      const accepted = await addReply(req.params.id, branchId, req.user.userId, req.body);
+      const reminder = await prisma.reminder.findUnique({ where: { id: req.params.id }, include: reminderInclude });
+      return response.insertionSuccess(res, reminder, accepted ? "Notice Accepted" : "Reply Sent");
+    } catch (error) {
+      return branch.handleError(res, error, "Notice");
     }
   }
 

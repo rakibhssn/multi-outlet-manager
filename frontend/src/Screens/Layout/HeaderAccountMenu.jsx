@@ -10,14 +10,31 @@ import {
 import { CustomDropDown } from "@/components/custom";
 import ApiService, { clearSession } from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
+import { fullName } from "@/lib/Functions/Common";
 import { isHQAccount } from "@/lib/Menus";
 import { userData } from "@/lib/Variables";
+
+function accountLabels(user) {
+  if (isHQAccount(user)) {
+    return {
+      title: user?.role?.name ?? "",
+      subtitle: user?.company?.name ?? "",
+    };
+  }
+  const name =
+    (user?.staff && fullName(user.staff)) ||
+    user?.company?.contactPersonName ||
+    user?.email ||
+    "";
+  return { title: name, subtitle: user?.role?.name ?? "" };
+}
 
 export default function HeaderAccountMenu({ user }) {
   const navigate = useNavigate();
   const { refreshToken } = useAtomValue(userData);
   const [signingOut, setSigningOut] = useState(false);
   const accountLink = `${isHQAccount(user) ? "/hq" : "/outlet"}/account`;
+  const labels = accountLabels(user);
 
   const signOut = () => {
     if (signingOut) return;
@@ -32,13 +49,11 @@ export default function HeaderAccountMenu({ user }) {
       trigger={
         <button type="button" className="account-box">
           <span className="account-avatar">
-            {(user?.role?.name ?? "").charAt(0).toUpperCase()}
+            {labels.title.charAt(0).toUpperCase()}
           </span>
           <span className="account-meta">
-            <span className="account-name">{user?.role?.name ?? ""}</span>
-            <span className="account-role">
-              {user?.company?.name ? `${user.company.name}` : ""}
-            </span>
+            <span className="account-name">{labels.title}</span>
+            <span className="account-role">{labels.subtitle}</span>
           </span>
           <LuChevronDown className="account-chevron" />
         </button>
