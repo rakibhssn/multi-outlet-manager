@@ -1,8 +1,14 @@
 const prisma = require("../config/prisma");
+const { Prisma } = require("../../generated/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
+const { closeOpenShifts } = require("./Shift");
 
-const STAFF_ACCOUNT = { role: "USER", accountType: "OUTLET_STAFF" };
+const { detachForeignRoles, resolveAccountRole } = require("../helper/Role_Access");
+const { revokeAllSessions } = require("../helper/Session");
+
+const STAFF_ACCOUNT_TYPE = "OUTLET_STAFF";
+const HIDDEN_VIEWER_ACCOUNTS = ["OUTLET"];
 
 const REQUIRED_FIELDS = [
   "branchId",
@@ -23,7 +29,15 @@ const REQUIRED_FIELDS = [
 
 const OPTIONAL_FIELDS = ["email", "address2", "salaryType", "status"];
 
-const SEARCH_FIELDS = ["firstName", "lastName", "email", "phone", "badgeNumber", "jobTitle", "city"];
+const SEARCH_FIELDS = [
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "badgeNumber",
+  "jobTitle",
+  "city",
+];
 
 const DESIGNATIONS = [
   "GENERAL_MANAGER",
@@ -39,17 +53,101 @@ const DESIGNATIONS = [
   "DELIVERY_DRIVER",
   "CLEANER",
 ];
-const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "TEMPORARY", "SEASONAL", "CONTRACTOR"];
+const EMPLOYMENT_TYPES = [
+  "FULL_TIME",
+  "PART_TIME",
+  "TEMPORARY",
+  "SEASONAL",
+  "CONTRACTOR",
+];
 const SALARY_TYPES = ["HOURLY", "SALARY"];
 
 const staffInclude = {
-  outlet: { select: { id: true, name: true, parent: { select: { id: true, name: true } } } },
+  outlet: {
+    select: {
+      id: true,
+      name: true,
+      parent: { select: { id: true, name: true } },
+    },
+  },
   users: {
-    select: { id: true, email: true, role: true, status: true, accountType: true },
+    select: {
+      id: true,
+      email: true,
+      role: { select: { id: true, key: true, name: true } },
+      status: true,
+      accountType: true,
+    },
     orderBy: { createdAt: "asc" },
     take: 1,
   },
+  assignments: {
+    where: { endDate: null },
+    select: { id: true, startDate: true },
+    orderBy: { startDate: "desc" },
+    take: 1,
+  },
+  shifts: {
+    where: { status: "ON_SHIFT" },
+    select: { id: true, clockInAt: true },
+    take: 1,
+  },
 };
+
+const assignmentInclude = {
+  outlet: {
+    select: {
+      id: true,
+      name: true,
+      parent: { select: { id: true, name: true } },
+    },
+  },
+};
+
+async function withOutletsWorked(staffs) {
+  const list = [].concat(staffs).filter(Boolean);
+  if (!list.length) return staffs;
+
+  const rows = await prisma.$queryRaw`
+    SELECT "staffId", COUNT(DISTINCT "branchId")::int AS "outlets"
+    FROM "StaffAssignment"
+    WHERE "staffId" IN (${Prisma.join(list.map((staff) => staff.id))})
+    GROUP BY "staffId"
+  `;
+  const counts = Object.fromEntries(
+    rows.map((row) => [row.staffId, row.outlets]),
+  );
+  const result = list.map((staff) => ({
+    ...staff,
+    outletsWorked: counts[staff.id] ?? 0,
+  }));
+
+  return Array.isArray(staffs) ? result : result[0];
+}
+
+async function moveStaff(tx, staff, branchId, date, note) {
+  await closeOpenShifts(tx, staff.id, { note: "Closed on transfer" });
+  await tx.staffAssignment.updateMany({
+    where: { staffId: staff.id, endDate: null },
+    data: { endDate: date },
+  });
+  await tx.staffAssignment.create({
+    data: { staffId: staff.id, branchId, startDate: date, note: note || null },
+  });
+  await tx.staff.update({ where: { id: staff.id }, data: { branchId } });
+  await tx.user.updateMany({
+    where: { staffId: staff.id },
+    data: { branchId },
+  });
+  const outlet = await tx.company.findUnique({ where: { id: branchId }, select: { parentId: true } });
+  await detachForeignRoles(tx, { staffId: staff.id }, outlet?.parentId, STAFF_ACCOUNT_TYPE);
+}
+
+function excludeViewer(viewer) {
+  if (!viewer?.userId || !HIDDEN_VIEWER_ACCOUNTS.includes(viewer.accountType))
+    return {};
+  return { users: { none: { id: viewer.userId } } };
+}
 
 function toDate(value) {
   if (!value) return null;
@@ -60,42 +158,44 @@ function toDate(value) {
 function pickData(body) {
   const data = {};
   for (const field of [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]) {
-    if (body[field] !== undefined) data[field] = body[field] === "" ? null : body[field];
+    if (body[field] !== undefined)
+      data[field] = body[field] === "" ? null : body[field];
   }
   if (body.hireDate) data.hireDate = toDate(body.hireDate);
   if (body.exitDate !== undefined) data.exitDate = toDate(body.exitDate);
   return data;
 }
 
-function validateBody(body, { requirePassword }) {
-  const missing = REQUIRED_FIELDS.filter((field) => !String(body[field] ?? "").trim());
-  if (missing.length) return `Missing required fields: ${missing.join(", ")}`;
+function validateJob(body) {
   if (!DESIGNATIONS.includes(body.designation)) return "Invalid designation!";
   if (!EMPLOYMENT_TYPES.includes(body.employmentType)) return "Invalid employment type!";
   if (body.salaryType && !SALARY_TYPES.includes(body.salaryType)) return "Invalid salary type!";
   if (body.hireDate && toDate(body.hireDate) === undefined) return "Invalid hire date!";
   if (body.exitDate && toDate(body.exitDate) === undefined) return "Invalid exit date!";
-
-  const { user } = body;
-  if (!user && !requirePassword) return null;
-  if (!user || !String(user.email ?? "").trim()) return "Login email is required!";
-  if (!/^\S+@\S+\.\S+$/.test(user.email)) return "Login email is invalid!";
-  if (requirePassword && !user.password) return "Password is required!";
-  if (user.password && String(user.password).length < 6) {
-    return "Password must be at least 6 characters!";
-  }
   return null;
+}
+
+function validateBody(body, options) {
+  return (
+    branch.missingFields(body, REQUIRED_FIELDS) ??
+    validateJob(body) ??
+    branch.validateAccount(body.user, options)
+  );
 }
 
 async function findOutlet(branchId) {
   if (!branchId) return null;
   return prisma.company.findFirst({
     where: { id: branchId, parentId: { not: null } },
-    select: { id: true },
+    select: { id: true, parentId: true },
   });
 }
 
-async function saveStaffAccount(tx, staff, user) {
+function staffRoleFor(user, outlet) {
+  return resolveAccountRole(user?.roleId, STAFF_ACCOUNT_TYPE, outlet.parentId);
+}
+
+async function saveStaffAccount(tx, staff, user, roleId) {
   const data = await branch.accountData(user);
   const account = await tx.user.findFirst({
     where: { staffId: staff.id },
@@ -104,51 +204,81 @@ async function saveStaffAccount(tx, staff, user) {
   });
 
   if (account) {
+    if (data.password) await revokeAllSessions(account.id, tx);
     return tx.user.update({
       where: { id: account.id },
-      data: { ...data, branchId: staff.branchId },
+      data: {
+        ...data,
+        branchId: staff.branchId,
+        ...(user?.roleId ? { roleId } : {}),
+        ...(data.password ? { passwordChangedAt: new Date() } : {}),
+      },
     });
   }
   if (!data.password) {
-    throw Object.assign(new Error("Password is required to create the login account!"), {
-      status: 422,
-    });
+    throw Object.assign(
+      new Error("Password is required to create the login account!"),
+      {
+        status: 422,
+      },
+    );
   }
   return tx.user.create({
-    data: { ...data, ...STAFF_ACCOUNT, branchId: staff.branchId, staffId: staff.id },
+    data: {
+      ...data,
+      roleId,
+      accountType: STAFF_ACCOUNT_TYPE,
+      branchId: staff.branchId,
+      staffId: staff.id,
+    },
   });
 }
 
 class Staff {
   async list(req, res) {
     try {
-      const page = branch.paging(req.query);
-      const search = String(req.query.search ?? "").trim();
-      const contains = { contains: search, mode: "insensitive" };
-      const { branchId, companyId, designation, status } = req.query;
-
-      const where = {
-        ...(branchId ? { branchId } : {}),
-        ...(companyId ? { outlet: { parentId: companyId } } : {}),
-        ...(designation ? { designation } : {}),
-        ...(status ? { status } : {}),
-        ...(search ? { OR: SEARCH_FIELDS.map((field) => ({ [field]: contains })) } : {}),
+      const list = branch.listParams(req.query, {
+        sortable: [
+          "firstName",
+          "badgeNumber",
+          "designation",
+          "hireDate",
+          "status",
+          "createdAt",
+        ],
+      });
+      let where = {
+        ...(req.query.branchId ? { branchId: req.query.branchId } : {}),
+        ...(req.query.companyId
+          ? { outlet: { parentId: req.query.companyId } }
+          : {}),
+        ...(req.query.designation
+          ? { designation: req.query.designation }
+          : {}),
+        ...(req.query.status ? { status: req.query.status } : {}),
+        ...branch.searchWhere(list.search, SEARCH_FIELDS),
+        ...excludeViewer(req.user),
       };
 
-      const [total, staffs] = await prisma.$transaction([
-        prisma.staff.count({ where }),
+      if (req.query.id) {
+        where = { ...where, users: { none: { id: req.query.id } } };
+      }
+
+      const [staffs, total] = await prisma.$transaction([
         prisma.staff.findMany({
           where,
           include: staffInclude,
-          orderBy: { createdAt: "desc" },
-          skip: page.skip,
-          take: page.take,
+          orderBy: list.orderBy,
+          skip: list.skip,
+          take: list.take,
         }),
+        prisma.staff.count({ where }),
       ]);
 
-      return response.success(
+      return response.list(
         res,
-        branch.paginated(staffs, total, page),
+        await withOutletsWorked(staffs),
+        total,
         "Staff List Fetched Successfully",
       );
     } catch (error) {
@@ -180,25 +310,44 @@ class Staff {
         return response.error(res, invalid, 422);
       }
 
-      if (!(await findOutlet(req.body.branchId))) {
-        return response.error(res, "Select a valid outlet for this staff!", 422);
+      const outlet = await findOutlet(req.body.branchId);
+      if (!outlet) {
+        return response.error(
+          res,
+          "Select a valid outlet for this staff!",
+          422,
+        );
       }
+      const roleId = await staffRoleFor(req.body.user, outlet);
 
+      const data = pickData(req.body);
       const staff = await prisma.staff.create({
         data: {
-          ...pickData(req.body),
+          ...data,
           users: {
             create: {
               ...(await branch.accountData(req.body.user)),
-              ...STAFF_ACCOUNT,
+              roleId,
+              accountType: STAFF_ACCOUNT_TYPE,
               branchId: req.body.branchId,
+            },
+          },
+          assignments: {
+            create: {
+              branchId: req.body.branchId,
+              startDate: data.hireDate ?? new Date(),
+              note: "Initial posting",
             },
           },
         },
         include: staffInclude,
       });
 
-      return response.insertionSuccess(res, staff, "Staff Created Successfully");
+      return response.insertionSuccess(
+        res,
+        staff,
+        "Staff Created Successfully",
+      );
     } catch (error) {
       return branch.handleError(res, error, "Staff");
     }
@@ -211,21 +360,49 @@ class Staff {
         return response.error(res, invalid, 422);
       }
 
-      if (!(await findOutlet(req.body.branchId))) {
-        return response.error(res, "Select a valid outlet for this staff!", 422);
+      const outlet = await findOutlet(req.body.branchId);
+      if (!outlet) {
+        return response.error(
+          res,
+          "Select a valid outlet for this staff!",
+          422,
+        );
+      }
+      const roleId = await staffRoleFor(req.body.user, outlet);
+
+      const current = await prisma.staff.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, branchId: true },
+      });
+      if (!current) {
+        return response.notFoundError(res, "Staff Not Found!");
       }
 
       const staff = await prisma.$transaction(async (tx) => {
+        const { branchId, ...data } = pickData(req.body);
+        if (branchId && branchId !== current.branchId) {
+          await moveStaff(
+            tx,
+            current,
+            branchId,
+            new Date(),
+            "Moved while editing staff",
+          );
+        }
+
         const updated = await tx.staff.update({
           where: { id: req.params.id },
-          data: pickData(req.body),
+          data,
         });
 
         if (req.body.user) {
-          await saveStaffAccount(tx, updated, req.body.user);
+          await saveStaffAccount(tx, updated, req.body.user, roleId);
         }
 
-        return tx.staff.findUnique({ where: { id: req.params.id }, include: staffInclude });
+        return tx.staff.findUnique({
+          where: { id: req.params.id },
+          include: staffInclude,
+        });
       });
 
       return response.updateSuccess(res, staff, "Staff Updated Successfully");
@@ -245,13 +422,133 @@ class Staff {
         return response.notFoundError(res, "Staff Not Found!");
       }
 
-      const staff = await prisma.staff.update({
-        where: { id: req.params.id },
-        data: { status: current.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" },
-        include: staffInclude,
+      const staff = await prisma.$transaction(async (tx) => {
+        if (current.status === "ACTIVE") {
+          await closeOpenShifts(tx, req.params.id, { note: "Closed when staff was deactivated" });
+        }
+        return tx.staff.update({
+          where: { id: req.params.id },
+          data: { status: current.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" },
+          include: staffInclude,
+        });
       });
 
       return response.updateSuccess(res, staff, `Staff Marked ${staff.status}`);
+    } catch (error) {
+      return branch.handleError(res, error, "Staff");
+    }
+  }
+
+  async transfer(req, res) {
+    try {
+      const staff = await prisma.staff.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, branchId: true, firstName: true, lastName: true },
+      });
+      if (!staff) {
+        return response.notFoundError(res, "Staff Not Found!");
+      }
+
+      const { branchId, note } = req.body;
+      if (!(await findOutlet(branchId))) {
+        return response.error(
+          res,
+          "Select a valid outlet to transfer to!",
+          422,
+        );
+      }
+      if (branchId === staff.branchId) {
+        return response.error(res, "Staff already works at this outlet!", 422);
+      }
+
+      const date = req.body.transferDate
+        ? toDate(req.body.transferDate)
+        : new Date();
+      if (!date) {
+        return response.error(res, "Invalid transfer date!", 422);
+      }
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (date > today) {
+        return response.error(
+          res,
+          "Transfer date cannot be in the future!",
+          422,
+        );
+      }
+
+      const open = await prisma.staffAssignment.findFirst({
+        where: { staffId: staff.id, endDate: null },
+        orderBy: { startDate: "desc" },
+        select: { startDate: true },
+      });
+      if (open && date < open.startDate) {
+        return response.error(
+          res,
+          "Transfer date cannot be before the current posting started!",
+          422,
+        );
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await moveStaff(
+          tx,
+          staff,
+          branchId,
+          date,
+          note ? String(note).trim() : null,
+        );
+      });
+
+      const updated = await prisma.staff.findUnique({
+        where: { id: staff.id },
+        include: staffInclude,
+      });
+
+      return response.updateSuccess(
+        res,
+        await withOutletsWorked(updated),
+        `${staff.firstName} ${staff.lastName} Transferred To ${updated.outlet?.name}`,
+      );
+    } catch (error) {
+      return branch.handleError(res, error, "Staff");
+    }
+  }
+
+  async assignments(req, res) {
+    try {
+      const staff = await prisma.staff.findUnique({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (!staff) {
+        return response.notFoundError(res, "Staff Not Found!");
+      }
+
+      const list = branch.listParams(req.query, {
+        sortable: ["startDate", "endDate"],
+        sortBy: "startDate",
+        orderBy: "desc",
+      });
+      const where = { staffId: staff.id };
+
+      const [assignments, total] = await prisma.$transaction([
+        prisma.staffAssignment.findMany({
+          where,
+          include: assignmentInclude,
+          orderBy: list.orderBy,
+          skip: list.skip,
+          take: list.take,
+        }),
+        prisma.staffAssignment.count({ where }),
+      ]);
+
+      return response.list(
+        res,
+        assignments,
+        total,
+        "Staff Postings Fetched Successfully",
+      );
     } catch (error) {
       return branch.handleError(res, error, "Staff");
     }

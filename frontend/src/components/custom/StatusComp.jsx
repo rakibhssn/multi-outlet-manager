@@ -1,5 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
+import { humanize } from "@/lib/Functions/Common";
 
 const STATUS_TONE = {
   ACTIVE: "status-success",
@@ -8,15 +9,21 @@ const STATUS_TONE = {
   UNAVAILABLE: "status-warning",
   SOLD_OUT: "status-warning",
   DISCONTINUED: "status-muted",
+  CONFIRMED: "status-info",
+  COMPLETED: "status-success",
+  CANCELLED: "status-danger",
+  ON_SHIFT: "status-success",
+  CRITICAL: "status-danger",
+  LOW: "status-warning",
 };
 
-const humanize = (value) =>
-  String(value)
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-
-export default function StatusComp({ type = "ACTIVE", label, tone, onClick, className }) {
+export default function StatusComp({
+  type = "ACTIVE",
+  label,
+  tone,
+  onClick,
+  className,
+}) {
   const Tag = onClick ? "button" : "span";
 
   return (

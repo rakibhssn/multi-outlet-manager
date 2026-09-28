@@ -6,46 +6,27 @@ import { useFormik } from "formik";
 import { AnimateButton, FoodBackground, InputField } from "@/components/custom";
 import { LoginValues } from "@/lib/Schema/FormValues";
 import { LoginValidation } from "@/lib/Schema/FormValidation";
+import useNotify from "@/hooks/useNotify";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { useSetAtom } from "jotai";
-import { notificationModal, userData } from "@/lib/Variables";
+import { userData } from "@/lib/Variables";
+import { inputProps } from "@/lib/Functions/FormField";
 
 export default function Login() {
   const setLoginData = useSetAtom(userData);
-  const setNotification = useSetAtom(notificationModal);
+  const notify = useNotify();
   const [loading, setLoading] = useState(false);
 
   function handleSubmit(values) {
     setLoading(true);
 
-    ApiService.post(API_LINK.Login, values)
-      .then((res) => {
-        if (res.status === "success") {
-          setLoginData({ ...res?.data, isLoggedIn: true });
-          setNotification({
-            open: true,
-            title: "Success",
-            description: res?.message,
-          });
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
+    notify
+      .submit(ApiService.post(API_LINK.Login, values), {
+        errorText: "Failed to Login",
+        onSuccess: (res) => setLoginData({ ...res?.data, isLoggedIn: true }),
       })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to Login",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }
 
   const formik = useFormik({
@@ -79,11 +60,7 @@ export default function Login() {
               placeholder="chef@restaurant.com"
               autoComplete="email"
               preIcon={LuMail}
-              value={formik.values.email}
-              onChange={formik.handleChange("email")}
-              onBlur={formik.handleBlur("email")}
-              showError={!!(formik.touched.email && formik.errors.email)}
-              error={formik.errors.email}
+              {...inputProps(formik, "email")}
             />
 
             <InputField
@@ -100,11 +77,7 @@ export default function Login() {
                   Forgot password?
                 </Link>
               }
-              value={formik.values.password}
-              onChange={formik.handleChange("password")}
-              onBlur={formik.handleBlur("password")}
-              showError={!!(formik.touched.password && formik.errors.password)}
-              error={formik.errors.password}
+              {...inputProps(formik, "password")}
             />
 
             <AnimateButton

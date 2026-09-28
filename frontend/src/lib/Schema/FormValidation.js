@@ -38,6 +38,8 @@ const confirmPassword = yup
   .string()
   .oneOf([yup.ref("userPassword")], "Passwords do not match");
 
+const loginRole = yup.string().required("Login role is required");
+
 export const CompanyValidation = yup.object({
   ...companyFields,
   userPassword: yup
@@ -58,12 +60,14 @@ export const CompanyUpdateValidation = yup.object({
 
 const outletFields = {
   companyId: yup.string().required("Company is required"),
+  userRoleId: loginRole,
   name: yup.string().trim().required("Outlet name is required"),
 };
 
 export const OutletValidation = CompanyValidation.shape(outletFields);
 
-export const OutletUpdateValidation = CompanyUpdateValidation.shape(outletFields);
+export const OutletUpdateValidation =
+  CompanyUpdateValidation.shape(outletFields);
 
 const staffFields = {
   branchId: yup.string().required("Outlet is required"),
@@ -90,6 +94,7 @@ const staffFields = {
   state: yup.string().trim().required("State is required"),
   country: yup.string().trim().required("Country is required"),
   status: yup.string().oneOf(["ACTIVE", "INACTIVE"]).required(),
+  userRoleId: loginRole,
   userEmail: yup
     .string()
     .trim()
@@ -115,10 +120,30 @@ export const StaffUpdateValidation = yup.object({
   }),
 });
 
+export const StaffTransferValidation = yup.object({
+  branchId: yup.string().required("Select the outlet to transfer to"),
+  transferDate: yup.string().required("Transfer date is required"),
+  note: yup.string().trim().max(255, "Note must be at most 255 characters"),
+});
+
+const isHttpUrl = (value) => {
+  if (!value) return true;
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+};
+
+const imageUrl = yup
+  .string()
+  .trim()
+  .test("image-url", "Enter a valid image URL", isHttpUrl);
+
 export const MenuValidation = yup.object({
   name: yup.string().trim().required("Menu name is required"),
   description: yup.string().trim(),
-  menuImage: yup.string().trim().url("Enter a valid image URL"),
+  menuImage: imageUrl,
   status: yup.string().oneOf(["ACTIVE", "INACTIVE"]).required(),
 });
 
@@ -126,7 +151,7 @@ export const MenuItemValidation = yup.object({
   menuId: yup.string().required("Menu is required"),
   name: yup.string().trim().required("Item name is required"),
   description: yup.string().trim(),
-  menuItemImage: yup.string().trim().url("Enter a valid image URL"),
+  menuItemImage: imageUrl,
   basePrice: yup
     .number()
     .typeError("Base price must be a number")
@@ -141,4 +166,43 @@ export const MenuItemValidation = yup.object({
     .string()
     .oneOf(["AVAILABLE", "UNAVAILABLE", "SOLD_OUT", "DISCONTINUED"])
     .required("Status is required"),
+});
+
+const optionalPrice = yup
+  .number()
+  .transform((value, original) => (original === "" ? undefined : value))
+  .typeError("Price must be a number")
+  .min(0, "Price cannot be negative");
+
+const stockCount = yup
+  .number()
+  .transform((value, original) => (original === "" ? undefined : value))
+  .typeError("Stock must be a number")
+  .integer("Stock must be a whole number")
+  .min(0, "Stock cannot be negative");
+
+export const OutletPriceValidation = yup.object({
+  price: optionalPrice,
+  stock: stockCount.required("Stock is required"),
+});
+
+export const isValidOutletPrice = (value) => optionalPrice.isValidSync(value);
+
+export const isValidStock = (value) => stockCount.isValidSync(value);
+
+export const PasswordChangeValidation = yup.object({
+  currentPassword: yup.string().required("Enter your current password"),
+  newPassword: yup
+    .string()
+    .required("Enter a new password")
+    .min(8, "Use at least 8 characters")
+    .max(72, "Password is too long")
+    .notOneOf(
+      [yup.ref("currentPassword")],
+      "The new password must differ from the current one",
+    ),
+  confirmPassword: yup
+    .string()
+    .required("Repeat the new password")
+    .oneOf([yup.ref("newPassword")], "The two passwords do not match"),
 });

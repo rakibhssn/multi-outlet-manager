@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   LuArrowDown,
   LuArrowUp,
@@ -20,8 +20,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import AnimateButton from "./AnimateButton";
+import AutoCompleteField from "./AutoCompleteField";
 import CustomSelectField from "./CustomSelectField";
 import InputField from "./InputField";
+
+const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const getValue = (record, dataIndex) =>
   dataIndex
@@ -30,9 +33,13 @@ const getValue = (record, dataIndex) =>
         .reduce((acc, key) => (acc == null ? acc : acc[key]), record)
     : undefined;
 
-const defaultSorter = (dataIndex) => (a, b) => {
-  const x = getValue(a, dataIndex);
-  const y = getValue(b, dataIndex);
+const getSearchableText = (value) => {
+  if (value == null) return null;
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  return null;
+};
+
+const compareValues = (x, y) => {
   if (x == null) return 1;
   if (y == null) return -1;
   if (typeof x === "number" && typeof y === "number") return x - y;
@@ -44,95 +51,144 @@ export default function CustomTable({
   dataSource = [],
   rowKey = "id",
   loading = false,
-  emptyMessage = "No records found",
+  emptyText = "No records found",
   title,
   description,
   actions,
   onAdd,
   addLabel = "Add new",
-  onReload,
+  showReload = true,
+  reloadAction,
   showSearch = true,
   searchPlaceholder = "Search...",
-  searchKeys,
+  onSearch,
+  filterOptions,
+  filterPlaceholder = "All",
+  defaultFilter = "all",
+  onFilterSearch,
+  filterLoading = false,
   pagination = true,
-  pageSizeOptions = [10, 20, 50],
-  defaultPageSize = pageSizeOptions[0],
-  onRowClick,
+  pageSize: initialPageSize = 10,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   total,
-  page: pageProp,
-  pageSize: pageSizeProp,
-  onPageChange,
-  onPageSizeChange,
-  searchValue,
-  onSearchChange,
+  onChange,
+  onRowClick,
   className,
 }) {
-  const serverSide = !!onPageChange;
-  const [localSearch, setLocalSearch] = useState("");
   const [sort, setSort] = useState(null);
-  const [localPage, setLocalPage] = useState(1);
-  const [localPageSize, setLocalPageSize] = useState(defaultPageSize);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilterValue, setActiveFilterValue] = useState(defaultFilter || "all");
 
-  const search = searchValue ?? localSearch;
-  const page = serverSide ? pageProp ?? 1 : localPage;
-  const pageSize = serverSide ? pageSizeProp ?? defaultPageSize : localPageSize;
+  const serverDriven = total != null;
 
-  const setSearch = (value) => {
-    if (onSearchChange) onSearchChange(value);
-    else setLocalSearch(value);
-  };
-  const setPage = (next) => {
-    const value = typeof next === "function" ? next(page) : next;
-    if (serverSide) onPageChange(value);
-    else setLocalPage(value);
-  };
-  const setPageSize = (size) => {
-    if (serverSide) onPageSizeChange?.(size);
-    else setLocalPageSize(size);
-  };
-
-  const keys = useMemo(
-    () => searchKeys ?? columns.map((col) => col.dataIndex).filter(Boolean),
-    [searchKeys, columns],
+  const activeFilterOption = useMemo(
+    () => filterOptions?.find((option) => option.value === activeFilterValue),
+    [filterOptions, activeFilterValue],
   );
 
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    if (serverSide || !keyword) return dataSource;
-    return dataSource.filter((record) =>
-      keys.some((key) => String(getValue(record, key) ?? "").toLowerCase().includes(keyword)),
+  const filteredData = useMemo(() => {
+    const predicate = activeFilterOption?.predicate;
+    if (serverDriven || !predicate) return dataSource;
+    return dataSource.filter(predicate);
+  }, [dataSource, activeFilterOption, serverDriven]);
+
+  const searchedData = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (serverDriven || !query) return filteredData;
+    return filteredData.filter((record) =>
+      columns.some((column) => {
+        if (!column.dataIndex) return false;
+        const text = getSearchableText(getValue(record, column.dataIndex));
+        return text !== null && text.toLowerCase().includes(query);
+      }),
     );
-  }, [dataSource, keys, search, serverSide]);
+  }, [filteredData, searchQuery, columns, serverDriven]);
 
-  const sorted = useMemo(() => {
-    if (!sort) return filtered;
-    const column = columns.find((col) => col.key === sort.key);
-    if (!column) return filtered;
-    const sorter = column.sorter ?? defaultSorter(column.dataIndex);
-    const list = [...filtered].sort(sorter);
-    return sort.direction === "desc" ? list.reverse() : list;
-  }, [filtered, sort, columns]);
+  const sortedData = useMemo(() => {
+    if (serverDriven || !sort) return searchedData;
+    const column = columns.find((c) => c.key === sort.key);
+    if (!column) return searchedData;
 
-  const totalRows = serverSide ? total ?? dataSource.length : sorted.length;
+    const data = [...searchedData];
+    data.sort((a, b) => {
+      const result = column.sorter
+        ? column.sorter(a, b)
+        : compareValues(getValue(a, column.dataIndex), getValue(b, column.dataIndex));
+      return sort.direction === "asc" ? result : -result;
+    });
+    return data;
+  }, [searchedData, sort, columns, serverDriven]);
+
+  const totalRows = total ?? sortedData.length;
   const totalPages = pagination ? Math.max(1, Math.ceil(totalRows / pageSize)) : 1;
-  const start = pagination ? (page - 1) * pageSize : 0;
-  const rows = pagination && !serverSide ? sorted.slice(start, start + pageSize) : sorted;
+  const currentPage = Math.min(page, totalPages);
 
-  useEffect(() => {
-    if (!serverSide && localPage > totalPages) setLocalPage(totalPages);
-  }, [serverSide, localPage, totalPages]);
+  const paginatedData = useMemo(() => {
+    if (serverDriven || !pagination) return sortedData;
+    const start = (currentPage - 1) * pageSize;
+    return sortedData.slice(start, start + pageSize);
+  }, [sortedData, currentPage, pageSize, serverDriven, pagination]);
 
-  const toggleSort = (key) =>
+  const startIndex = totalRows === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(currentPage * pageSize, totalRows);
+
+  const handleSort = (column) => {
     setSort((prev) => {
-      if (prev?.key !== key) return { key, direction: "asc" };
-      if (prev.direction === "asc") return { key, direction: "desc" };
+      if (!prev || prev.key !== column.key) return { key: column.key, direction: "asc" };
+      if (prev.direction === "asc") return { key: column.key, direction: "desc" };
       return null;
     });
+    setPage(1);
+  };
+
+  const handleSearch = (value) => {
+    setSearchQuery(value);
+    setPage(1);
+    onSearch?.(value);
+  };
+
+  const handleFilter = (value) => {
+    setActiveFilterValue(value ?? "all");
+    setPage(1);
+  };
+
+  const onChangeRef = useRef(onChange);
+  const columnsRef = useRef(columns);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    columnsRef.current = columns;
+  });
+
+  const isInitialChange = useRef(true);
+  useEffect(() => {
+    if (isInitialChange.current) {
+      isInitialChange.current = false;
+      return;
+    }
+    const column = sort ? columnsRef.current.find((c) => c.key === sort.key) : null;
+    const sortField = column
+      ? column.sortKey ?? (column.dataIndex ? String(column.dataIndex) : null)
+      : null;
+
+    onChangeRef.current?.({
+      page: currentPage,
+      pageSize,
+      sort,
+      sortField,
+      filter: activeFilterValue === "all" ? null : activeFilterValue,
+    });
+  }, [currentPage, pageSize, sort, activeFilterValue]);
 
   const resolveKey = (record, index) =>
     typeof rowKey === "function" ? rowKey(record, index) : record[rowKey] ?? index;
 
-  const hasToolbar = title || description || actions || onAdd || onReload || showSearch;
+  const remoteFilter = !!onFilterSearch;
+  const showFilters = remoteFilter ? !!filterOptions : !!filterOptions?.length;
+  const hasToolbar =
+    title || description || actions || onAdd || (showReload && reloadAction) || showSearch || showFilters;
 
   return (
     <div className={cn("table-card", className)}>
@@ -148,24 +204,45 @@ export default function CustomTable({
             {showSearch && (
               <InputField
                 name="table-search"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  if (!serverSide) setPage(1);
-                }}
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
                 placeholder={searchPlaceholder}
                 preIcon={LuSearch}
                 className="table-search"
               />
             )}
+            {showFilters && remoteFilter && (
+              <AutoCompleteField
+                name="table-filter"
+                placeholder={filterPlaceholder}
+                options={filterOptions}
+                value={activeFilterValue === "all" ? null : activeFilterValue}
+                onValueChange={handleFilter}
+                onSearch={onFilterSearch}
+                loading={filterLoading}
+                filterLocally={false}
+                clearable
+                className="table-filter"
+              />
+            )}
+            {showFilters && !remoteFilter && (
+              <CustomSelectField
+                name="table-filter"
+                placeholder={filterPlaceholder}
+                options={[{ label: filterPlaceholder, value: "all" }, ...filterOptions]}
+                value={activeFilterValue}
+                onValueChange={handleFilter}
+                className="table-filter"
+              />
+            )}
             {actions}
-            {onReload && (
+            {showReload && reloadAction && (
               <AnimateButton
                 variant="outline"
                 size="icon"
                 aria-label="Reload"
                 preIcon={LuRefreshCw}
-                onClick={onReload}
+                onClick={reloadAction}
                 disabled={loading}
               />
             )}
@@ -180,7 +257,11 @@ export default function CustomTable({
             <TableRow>
               {columns.map((col) => {
                 const active = sort?.key === col.key;
-                const SortIcon = active ? (sort.direction === "asc" ? LuArrowUp : LuArrowDown) : LuArrowUpDown;
+                const SortIcon = active
+                  ? sort.direction === "asc"
+                    ? LuArrowUp
+                    : LuArrowDown
+                  : LuArrowUpDown;
                 return (
                   <TableHead
                     key={col.key}
@@ -188,7 +269,7 @@ export default function CustomTable({
                     className={cn("table-head", col.align && `table-align-${col.align}`, col.className)}
                   >
                     {col.sortable ? (
-                      <button type="button" onClick={() => toggleSort(col.key)} className="table-sort">
+                      <button type="button" onClick={() => handleSort(col)} className="table-sort">
                         {col.title}
                         <SortIcon className={cn("table-sort-icon", active && "table-sort-icon-active")} />
                       </button>
@@ -211,10 +292,10 @@ export default function CustomTable({
                   ))}
                 </TableRow>
               ))
-            ) : rows.length ? (
-              rows.map((record, index) => (
+            ) : paginatedData.length ? (
+              paginatedData.map((record, index) => (
                 <TableRow
-                  key={resolveKey(record, start + index)}
+                  key={resolveKey(record, index)}
                   onClick={onRowClick ? () => onRowClick(record) : undefined}
                   className={cn(onRowClick && "table-row-action")}
                 >
@@ -225,7 +306,7 @@ export default function CustomTable({
                         key={col.key}
                         className={cn("table-cell", col.align && `table-align-${col.align}`, col.className)}
                       >
-                        {col.render ? col.render(value, record, start + index) : value ?? "—"}
+                        {col.render ? col.render(value, record, index) : value ?? "—"}
                       </TableCell>
                     );
                   })}
@@ -234,7 +315,7 @@ export default function CustomTable({
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="table-empty">
-                  {emptyMessage}
+                  {emptyText}
                 </TableCell>
               </TableRow>
             )}
@@ -245,7 +326,7 @@ export default function CustomTable({
       {pagination && totalRows > 0 && (
         <div className="table-footer">
           <p className="table-count">
-            Showing {start + 1}–{Math.min(start + rows.length, totalRows)} of {totalRows}
+            Showing {startIndex}–{endIndex} of {totalRows}
           </p>
           <div className="table-pager">
             <CustomSelectField
@@ -264,20 +345,20 @@ export default function CustomTable({
               size="icon"
               aria-label="Previous page"
               preIcon={LuChevronLeft}
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
+              disabled={currentPage <= 1}
+              onClick={() => setPage(currentPage - 1)}
               className="table-page-btn"
             />
             <span className="table-page-label">
-              {page} / {totalPages}
+              {currentPage} / {totalPages}
             </span>
             <AnimateButton
               variant="outline"
               size="icon"
               aria-label="Next page"
               preIcon={LuChevronRight}
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(currentPage + 1)}
               className="table-page-btn"
             />
           </div>

@@ -8,6 +8,8 @@ frontend/.env
 frontend/package-lock.json
 
 /generated/prisma
+/backend/uploads
 .agents
 .claude
 .windsurf
+skills-lock.json

@@ -1,17 +1,18 @@
 import React, { useState } from "react";
 import { useFormik } from "formik";
-import { useSetAtom } from "jotai";
 import {
   CustomDialog,
+  CustomImageField,
   CustomSwitch,
   CustomTextarea,
   InputField,
 } from "@/components/custom";
+import useNotify from "@/hooks/useNotify";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
 import { MenuValues } from "@/lib/Schema/FormValues";
 import { MenuValidation } from "@/lib/Schema/FormValidation";
-import { notificationModal } from "@/lib/Variables";
+import { inputProps } from "@/lib/Functions/FormField";
 
 function toFormValues(menu) {
   if (!menu) return MenuValues;
@@ -22,44 +23,25 @@ function toFormValues(menu) {
 }
 
 export default function MenuEntry({ open, menu, onClose, onSaved }) {
-  const setNotification = useSetAtom(notificationModal);
+  const notify = useNotify();
   const [loading, setLoading] = useState(false);
   const isEdit = !!menu?.id;
 
   function handleSubmit(values) {
     setLoading(true);
-
-    (isEdit
+    const request = isEdit
       ? ApiService.put(API_LINK.MenuDetails(menu.id), values)
-      : ApiService.post(API_LINK.Menu, values)
-    )
-      .then((res) => {
-        if (res.status === "success") {
-          setNotification({
-            open: true,
-            title: "Success",
-            description: res?.message,
-          });
+      : ApiService.post(API_LINK.Menu, values);
+
+    notify
+      .submit(request, {
+        errorText: "Failed to save menu",
+        onSuccess: (res) => {
           onSaved?.(res?.data);
           formik.resetForm();
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
+        },
       })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to save menu",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }
 
   const formik = useFormik({
@@ -92,11 +74,7 @@ export default function MenuEntry({ open, menu, onClose, onSaved }) {
           placeholder="Breakfast"
           required
           className="form-span-2"
-          value={formik.values.name}
-          onChange={formik.handleChange("name")}
-          onBlur={formik.handleBlur("name")}
-          showError={!!(formik.touched.name && formik.errors.name)}
-          error={formik.errors.name}
+          {...inputProps(formik, "name")}
         />
         <CustomTextarea
           label="Description"
@@ -104,22 +82,13 @@ export default function MenuEntry({ open, menu, onClose, onSaved }) {
           rows={3}
           maxLength={300}
           className="form-span-2"
-          value={formik.values.description}
-          onChange={formik.handleChange("description")}
-          onBlur={formik.handleBlur("description")}
-          showError={!!(formik.touched.description && formik.errors.description)}
-          error={formik.errors.description}
+          {...inputProps(formik, "description")}
         />
-        <InputField
-          label="Image URL"
-          type="url"
-          placeholder="https://..."
+        <CustomImageField
+          label="Image"
+          folder="menu"
           className="form-span-2"
-          value={formik.values.menuImage}
-          onChange={formik.handleChange("menuImage")}
-          onBlur={formik.handleBlur("menuImage")}
-          showError={!!(formik.touched.menuImage && formik.errors.menuImage)}
-          error={formik.errors.menuImage}
+          {...inputProps(formik, "menuImage")}
         />
         <CustomSwitch
           name="status"

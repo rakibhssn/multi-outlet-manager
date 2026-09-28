@@ -1,9 +1,23 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const compression = require("compression");
 const expressLimit = require("express-rate-limit");
-const { ACCESS_DENIED } = require("./routes/api_init_error");
+const { ACCESS_DENIED, NOT_FOUND } = require("./routes/api_init_error");
+const { UPLOAD_ROOT } = require("./controller/Upload");
+const response = require("./controller/Response");
+const { healthCheck } = require("./helper/Health_Check");
+const { accessLog } = require("./helper/Access_Log");
+const { registerShutdown } = require("./helper/Shutdown");
+const { syncRoles } = require("./helper/Role_Access");
 
 const PORT = process.env.PORT || 3050;
+const JSON_BODY_LIMIT = "50kb";
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const limiter = expressLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -13,17 +27,57 @@ const limiter = expressLimit({
 
 const app = express();
 app.disable("x-powered-by");
-app.use(cors());
-app.use(express.json());
-
+app.use(accessLog);
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'none'"],
+        imgSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+        sandbox: [],
+      },
+    },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+app.use(
+  cors({
+    origin: CORS_ORIGINS,
+  }),
+);
+app.use(compression());
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use("/uploads", express.static(UPLOAD_ROOT, { maxAge: "7d" }));
+app.get("/health", healthCheck);
 app.use(limiter);
 
 app.get("/", (req, res) => ACCESS_DENIED(res));
 app.use("/api/v1/", require("./routes"));
+app.use((req, res) => NOT_FOUND(res));
+
+app.use((error, req, res, next) => {
+  if (error.type === "entity.too.large") {
+    return response.error(res, "Request body is too large!", 413);
+  }
+  if (error.type === "entity.parse.failed") {
+    return response.error(res, "Request body is not valid JSON!", 400);
+  }
+  if (error.expose && error.status >= 400 && error.status < 500) {
+    return response.error(res, error.message, error.status);
+  }
+  console.error(error);
+  return response.error(res, "Something went wrong!", 500);
+});
 
 const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+syncRoles().catch((error) => console.error("Role sync failed:", error));
 
 server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
@@ -37,37 +91,4 @@ server.on("error", (error) => {
   process.exit(1);
 });
 
-// Handle unexpected errors
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error);
-
-  server.close(() => {
-    process.exit(1);
-  });
-});
-
-process.on("unhandledRejection", (error) => {
-  console.error("Unhandled Promise Rejection:", error);
-
-  server.close(() => {
-    process.exit(1);
-  });
-});
-
-// Graceful shutdown
-const shutdown = (signal) => {
-  console.log(`${signal} received. Shutting down...`);
-
-  server.close(() => {
-    console.log("HTTP server closed.");
-    process.exit(0);
-  });
-
-  setTimeout(() => {
-    console.error("Forced shutdown.");
-    process.exit(1);
-  }, 10000);
-};
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+registerShutdown(server);

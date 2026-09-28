@@ -14,6 +14,7 @@ export const emptyNotifyData = {
 export const confirmModal = atom(emptyNotifyData);
 export const notificationModal = atom(emptyNotifyData);
 export const breadcrumbLabels = atom({});
+export const shiftRefresh = atom(0);
 export const userData = atomWithStorage(
   "data",
   {

@@ -1,270 +1,155 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { useSetAtom } from "jotai";
-import {
-  ActionComp,
-  CustomSelectField,
-  CustomTable,
-  StatusComp,
-} from "@/components/custom";
+import { ActionComp, CustomTable, StatusComp } from "@/components/custom";
 import { PageHeader } from "@/Screens/Layout/DashboardBlocks";
+import {
+  ContactCell,
+  LocationCell,
+  StackCell,
+} from "@/Screens/Layout/TableCells";
+import useCan from "@/hooks/useCan";
+import useConfirm from "@/hooks/useConfirm";
+import useNotify from "@/hooks/useNotify";
+import useRemoteOptions from "@/hooks/useRemoteOptions";
+import useScope from "@/hooks/useScope";
+import useTableList from "@/hooks/useTableList";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
-import { confirmModal, emptyNotifyData, notificationModal } from "@/lib/Variables";
-import useScope from "@/hooks/useScope";
+import { nameOption } from "@/lib/Functions/Common";
+import { OutletColumn } from "@/lib/TableData/Columns";
 import OutletEntry from "./OutletEntry";
 
-export default function OutletList({ companyId: fixedCompanyId, onChange }) {
-  const setNotification = useSetAtom(notificationModal);
-  const setConfirmation = useSetAtom(confirmModal);
+const DEFAULT_PARAMS = {
+  page: 1,
+  per_page: 10,
+  sort_by: "createdAt",
+  order_by: "desc",
+};
+
+export default function OutletList({
+  companyId: fixedCompanyId,
+  companyName,
+  onChange,
+}) {
   const navigate = useNavigate();
-  const [outlets, setOutlets] = useState([]);
-  const [companyOptions, setCompanyOptions] = useState([]);
   const scope = useScope();
+  const notify = useNotify();
+  const confirm = useConfirm();
+  const can = useCan();
+  const canCreate = can("outlets.create");
+  const canEdit = can("outlets.edit");
+  const canDelete = can("outlets.delete");
   const lockedCompanyId = fixedCompanyId ?? scope.companyId ?? "";
   const companyLocked = !!lockedCompanyId;
-  const [companyId, setCompanyId] = useState(lockedCompanyId);
   const embedded = !!fixedCompanyId;
-  const [pagination, setPagination] = useState({ page: 1, perPage: 10, total: 0 });
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [entry, setEntry] = useState({ open: false, outlet: null });
+  const { rows, offset, reload, params, ...table } = useTableList({
+    url: API_LINK.Outlet,
+    defaults: DEFAULT_PARAMS,
+    initialParams: { companyId: lockedCompanyId || undefined },
+    filterParam: (filter) => ({ companyId: lockedCompanyId || filter }),
+    errorText: "Failed to load outlets",
+  });
+  const [openModal, setOpenModal] = useState(false);
+  const [outlet, setOutlet] = useState(null);
 
-  const { page, perPage } = pagination;
+  const companyFilter = useRemoteOptions({
+    url: API_LINK.Company,
+    mapOption: nameOption,
+    enabled: !companyLocked,
+    errorText: "Failed to load companies",
+  });
 
-  const fetchOutlets = useCallback(() => {
-    setLoading(true);
+  const lockedCompany = useMemo(
+    () =>
+      lockedCompanyId
+        ? {
+            value: lockedCompanyId,
+            label: companyName ?? scope.companyName ?? "This company",
+          }
+        : null,
+    [lockedCompanyId, companyName, scope.companyName],
+  );
 
-    ApiService.get(API_LINK.Outlet, {
-      params: {
-        page,
-        perPage,
-        search: debouncedSearch || undefined,
-        companyId: companyId || undefined,
-      },
-    })
-      .then((res) => {
-        if (res.status === "success") {
-          const items = res?.data?.items ?? [];
-          const total = res?.data?.pagination?.total ?? 0;
-          setOutlets(items);
-          setPagination((prev) =>
-            !items.length && prev.page > 1
-              ? { ...prev, total, page: prev.page - 1 }
-              : { ...prev, total },
-          );
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load outlets",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
+  const refresh = useCallback(() => {
+    reload();
+    onChange?.();
+  }, [reload, onChange]);
+
+  const openEntry = (item) => {
+    setOutlet(item);
+    setOpenModal(true);
+  };
+
+  const outlets = useMemo(() => {
+    const toggleStatus = (item) =>
+      notify.submit(ApiService.patch(API_LINK.OutletStatus(item.id)), {
+        errorText: "Failed to change status",
+        onSuccess: refresh,
       });
-  }, [page, perPage, debouncedSearch, companyId, setNotification]);
 
-  useEffect(() => {
-    fetchOutlets();
-  }, [fetchOutlets]);
-
-  useEffect(() => {
-    if (scope.companyId) {
-      setCompanyOptions([{ label: scope.companyName, value: scope.companyId }]);
-      return;
-    }
-
-    ApiService.get(API_LINK.Company, { params: { perPage: 100 } })
-      .then((res) => {
-        if (res.status === "success") {
-          setCompanyOptions(
-            (res?.data?.items ?? []).map((item) => ({
-              label: item.name,
-              value: item.id,
-            })),
-          );
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load companies",
-        });
-      });
-  }, [scope.companyId, scope.companyName, setNotification]);
-
-  useEffect(() => {
-    const next = search.trim();
-    if (next === debouncedSearch) return undefined;
-    const timer = setTimeout(() => {
-      setDebouncedSearch(next);
-      setPagination((prev) => ({ ...prev, page: 1 }));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [search, debouncedSearch]);
-
-  function toggleStatus(outlet) {
-    ApiService.patch(API_LINK.OutletStatus(outlet.id))
-      .then((res) => {
-        if (res.status === "success") {
-          setNotification({
-            open: true,
-            title: "Success",
-            description: res?.message,
-          });
-          fetchOutlets();
-          onChange?.();
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to change status",
-        });
-      });
-  }
-
-  function confirmDelete(outlet) {
-    setConfirmation({
-      open: true,
-      title: "Delete Outlet",
-      description: `"${outlet.name}" and its login account will be removed permanently.`,
-      footer: true,
-      remove: true,
-      submitLabel: "Delete",
-      submitClick: () =>
-        ApiService.delete(API_LINK.OutletDetails(outlet.id))
-          .then((res) => {
-            if (res.status === "success") {
-              setNotification({
-                open: true,
-                title: "Success",
-                description: res?.message,
-              });
-              fetchOutlets();
-              onChange?.();
-            } else {
-              setNotification({
-                open: true,
-                title: "Error",
-                description: res.message,
-              });
-            }
-          })
-          .catch((error) => {
-            setNotification({
-              open: true,
-              title: "Error",
-              description: error?.response?.data?.message ?? "Failed to delete outlet",
-            });
-          })
-          .finally(() => {
-            setConfirmation(emptyNotifyData);
+    const removeOutlet = (item) =>
+      confirm.remove({
+        title: "Remove Outlet",
+        body: `Are you sure to remove "${item.name}" and its login account?`,
+        onConfirm: () =>
+          notify.submit(ApiService.delete(API_LINK.OutletDetails(item.id)), {
+            errorText: "Failed to delete outlet",
+            onSuccess: () => {
+              refresh();
+              confirm.close();
+            },
           }),
-    });
-  }
+      });
 
-  const columns = [
-    {
-      key: "name",
-      title: "Outlet",
-      dataIndex: "name",
-      render: (name, record) => (
-        <div className="cell-stack">
-          <span className="cell-title">{name}</span>
-          {!companyLocked && <span className="cell-sub">{record.parent?.name}</span>}
-        </div>
-      ),
-    },
-    {
-      key: "contact",
-      title: "Contact Person",
-      dataIndex: "contactPersonName",
-      render: (name, record) => (
-        <div className="cell-stack">
-          <span className="cell-title">{name}</span>
-          <span className="cell-sub">{record.contactPersonEmail}</span>
-          <span className="cell-sub">{record.contactPersonPhone}</span>
-        </div>
-      ),
-    },
-    {
-      key: "account",
-      title: "Login Account",
-      dataIndex: "users.0.email",
-      render: (email) => <span className="cell-title">{email ?? "No account"}</span>,
-    },
-    {
-      key: "city",
-      title: "Location",
-      dataIndex: "city",
-      render: (city, record) => (
-        <div className="cell-stack">
-          <span className="cell-title">{city}</span>
-          <span className="cell-sub">
-            {[record.state, record.country].filter(Boolean).join(", ")}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: "staffs",
-      title: "Staff",
-      dataIndex: "_count.staffs",
-      align: "center",
-    },
-    {
-      key: "status",
-      title: "Status",
-      dataIndex: "status",
-      render: (status, record) => (
-        <StatusComp type={status} onClick={() => toggleStatus(record)} />
-      ),
-    },
-    {
-      key: "actions",
-      title: "Actions",
-      align: "right",
-      render: (_, record) => (
-        <ActionComp
-          className="justify-end"
-          view
-          viewTitle="View outlet"
-          viewAction={() => navigate(`/hq/outlet/${record.id}`)}
-          edit
-          editTitle="Edit outlet"
-          editAction={() => setEntry({ open: true, outlet: record })}
-          remove
-          deleteTitle="Delete outlet"
-          deleteAction={() => confirmDelete(record)}
+    return rows.map((item, index) => ({
+      key: item.id,
+      id: 1 + index + offset,
+      name: (
+        <StackCell
+          title={item.name}
+          subtitle={!companyLocked && item.parent?.name}
         />
       ),
-    },
-  ];
+      contact: <ContactCell branch={item} />,
+      account: (
+        <span className="cell-title">
+          {item.users?.[0]?.email ?? "No account"}
+        </span>
+      ),
+      location: <LocationCell branch={item} />,
+      staffs: item._count?.staffs ?? 0,
+      status: (
+        <StatusComp
+          type={item.status}
+          onClick={canEdit ? () => toggleStatus(item) : undefined}
+        />
+      ),
+      action: (
+        <ActionComp
+          className="justify-end"
+          view={true}
+          viewTitle="View"
+          viewAction={() => navigate(`/hq/outlet/${item.id}`)}
+          edit={canEdit}
+          editTitle="Edit"
+          editAction={() => openEntry(item)}
+          remove={canDelete}
+          deleteTitle="Delete"
+          deleteAction={() => removeOutlet(item)}
+        />
+      ),
+    }));
+  }, [
+    rows,
+    offset,
+    refresh,
+    companyLocked,
+    canEdit,
+    canDelete,
+    navigate,
+    notify,
+    confirm,
+  ]);
 
   return (
     <div className={embedded ? "page-section" : "page"}>
@@ -276,53 +161,43 @@ export default function OutletList({ companyId: fixedCompanyId, onChange }) {
       )}
 
       <CustomTable
-        columns={columns}
-        dataSource={outlets}
-        loading={loading}
-        searchPlaceholder="Search name, contact or location..."
-        searchValue={search}
-        onSearchChange={setSearch}
         title={embedded ? "Outlets" : undefined}
         description={embedded ? "Outlets under this company" : undefined}
-        actions={
-          !companyLocked && (
-          <CustomSelectField
-            name="companyFilter"
-            placeholder="All companies"
-            options={[{ label: "All companies", value: "all" }, ...companyOptions]}
-            value={companyId || "all"}
-            onValueChange={(value) => {
-              setCompanyId(value === "all" ? "" : value);
-              setPagination((prev) => ({ ...prev, page: 1 }));
-            }}
-            className="table-filter"
-          />
-          )
-        }
-        total={pagination.total}
-        page={page}
-        pageSize={perPage}
-        onPageChange={(next) => setPagination((prev) => ({ ...prev, page: next }))}
-        onPageSizeChange={(size) =>
-          setPagination((prev) => ({ ...prev, perPage: size, page: 1 }))
-        }
-        emptyMessage="No outlets yet"
-        onReload={fetchOutlets}
-        onAdd={() => setEntry({ open: true, outlet: null })}
+        columns={OutletColumn}
+        dataSource={outlets}
+        rowKey="key"
+        loading={table.loading}
+        total={table.total}
+        pageSize={params.per_page}
+        onChange={table.onChange}
+        onSearch={table.onSearch}
+        filterOptions={companyLocked ? undefined : companyFilter.options}
+        filterPlaceholder="All companies"
+        onFilterSearch={companyFilter.onSearch}
+        filterLoading={companyFilter.loading}
         addLabel="Add Outlet"
+        onAdd={canCreate ? () => openEntry(null) : undefined}
+        reloadAction={reload}
+        showReload={true}
+        searchPlaceholder="Search name, contact or location..."
+        emptyText="No outlet has been created yet"
       />
 
       <OutletEntry
-        open={entry.open}
-        outlet={entry.outlet}
-        companyId={companyId}
-        companyOptions={companyOptions}
+        open={openModal}
+        outlet={outlet}
+        companyId={params.companyId}
+        lockedCompany={
+          lockedCompany ??
+          companyFilter.options.find(
+            (option) => option.value === params.companyId,
+          )
+        }
         lockCompany={companyLocked}
-        onClose={() => setEntry({ open: false, outlet: null })}
+        onClose={() => setOpenModal(false)}
         onSaved={() => {
-          setEntry({ open: false, outlet: null });
-          fetchOutlets();
-          onChange?.();
+          setOpenModal(false);
+          refresh();
         }}
       />
     </div>

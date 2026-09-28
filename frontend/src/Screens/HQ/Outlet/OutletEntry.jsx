@@ -1,23 +1,32 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useFormik } from "formik";
-import { useSetAtom } from "jotai";
 import {
+  AutoCompleteField,
   CustomDialog,
   CustomSelectField,
   CustomSwitch,
   CustomTextarea,
   InputField,
 } from "@/components/custom";
+import useNotify from "@/hooks/useNotify";
 import ApiService from "@/lib/ApiService";
 import { API_LINK } from "@/lib/API_LINK";
+import { nameOption } from "@/lib/Functions/Common";
+import useRemoteOptions from "@/hooks/useRemoteOptions";
+import useRoleOptions from "@/hooks/useRoleOptions";
 import { OutletValues } from "@/lib/Schema/FormValues";
 import {
   OutletUpdateValidation,
   OutletValidation,
 } from "@/lib/Schema/FormValidation";
-import { notificationModal } from "@/lib/Variables";
+import { inputProps, selectProps } from "@/lib/Functions/FormField";
 
-const ACCOUNT_FIELDS = ["userEmail", "userPassword", "userConfirmPassword"];
+const ACCOUNT_FIELDS = [
+  "userEmail",
+  "userRoleId",
+  "userPassword",
+  "userConfirmPassword",
+];
 
 function toFormValues(outlet, companyId) {
   if (!outlet) return { ...OutletValues, companyId: companyId ?? "" };
@@ -29,6 +38,7 @@ function toFormValues(outlet, companyId) {
     ...values,
     companyId: outlet.parentId ?? "",
     userEmail: outlet.users?.[0]?.email ?? "",
+    userRoleId: outlet.users?.[0]?.role?.id ?? "",
     userPassword: "",
     userConfirmPassword: "",
   };
@@ -42,6 +52,7 @@ function toPayload(values) {
     ...outlet,
     user: {
       email: values.userEmail,
+      roleId: values.userRoleId,
       ...(values.userPassword ? { password: values.userPassword } : {}),
     },
   };
@@ -51,52 +62,43 @@ export default function OutletEntry({
   open,
   outlet,
   companyId,
-  companyOptions = [],
+  lockedCompany,
   lockCompany = false,
   onClose,
   onSaved,
 }) {
-  const setNotification = useSetAtom(notificationModal);
+  const notify = useNotify();
   const [loading, setLoading] = useState(false);
   const isEdit = !!outlet?.id;
   const hasAccount = !!outlet?.users?.[0];
+  const selectedCompany = useMemo(
+    () => (isEdit ? nameOption(outlet?.parent) : (lockedCompany ?? null)),
+    [isEdit, outlet?.parent, lockedCompany],
+  );
+  const companies = useRemoteOptions({
+    url: API_LINK.Company,
+    mapOption: nameOption,
+    selected: selectedCompany,
+    enabled: open && !lockCompany,
+    errorText: "Failed to load companies",
+  });
 
   function handleSubmit(values) {
     setLoading(true);
-
     const payload = toPayload(values);
-
-    (isEdit
+    const request = isEdit
       ? ApiService.put(API_LINK.OutletDetails(outlet.id), payload)
-      : ApiService.post(API_LINK.Outlet, payload)
-    )
-      .then((res) => {
-        if (res.status === "success") {
-          setNotification({
-            open: true,
-            title: "Success",
-            description: res?.message,
-          });
+      : ApiService.post(API_LINK.Outlet, payload);
+
+    notify
+      .submit(request, {
+        errorText: "Failed to save outlet",
+        onSuccess: (res) => {
           onSaved?.(res?.data);
           formik.resetForm();
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
+        },
       })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to save outlet",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }
 
   const formik = useFormik({
@@ -106,6 +108,13 @@ export default function OutletEntry({
     onSubmit: handleSubmit,
   });
 
+  const roles = useRoleOptions({
+    accountType: "OUTLET",
+    companyId: formik.values.companyId,
+    account: outlet?.users?.[0],
+    formik,
+    enabled: open,
+  });
 
   const handleClose = () => {
     formik.resetForm();
@@ -126,29 +135,24 @@ export default function OutletEntry({
     >
       <form onSubmit={formik.handleSubmit} noValidate className="form-grid">
         <p className="form-section">Outlet</p>
-        <CustomSelectField
+        <AutoCompleteField
           label="Company"
-          placeholder="Select company"
-          options={companyOptions}
+          placeholder="Search company"
+          options={companies.options}
+          onSearch={companies.onSearch}
+          loading={companies.loading}
+          filterLocally={false}
           required
           className="form-span-2"
           disabled={lockCompany}
-          value={formik.values.companyId}
-          onValueChange={formik.handleChange("companyId")}
-          onBlur={formik.handleBlur("companyId")}
-          showError={!!(formik.touched.companyId && formik.errors.companyId)}
-          error={formik.errors.companyId}
+          {...selectProps(formik, "companyId")}
         />
         <InputField
           label="Outlet Name"
           placeholder="Tablewise Gulshan"
           required
           className="form-span-2"
-          value={formik.values.name}
-          onChange={formik.handleChange("name")}
-          onBlur={formik.handleBlur("name")}
-          showError={!!(formik.touched.name && formik.errors.name)}
-          error={formik.errors.name}
+          {...inputProps(formik, "name")}
         />
 
         <p className="form-section">Contact Person</p>
@@ -157,33 +161,21 @@ export default function OutletEntry({
           placeholder="Full name"
           required
           className="form-span-2"
-          value={formik.values.contactPersonName}
-          onChange={formik.handleChange("contactPersonName")}
-          onBlur={formik.handleBlur("contactPersonName")}
-          showError={!!(formik.touched.contactPersonName && formik.errors.contactPersonName)}
-          error={formik.errors.contactPersonName}
+          {...inputProps(formik, "contactPersonName")}
         />
         <InputField
           label="Email"
           type="email"
           placeholder="contact@outlet.com"
           required
-          value={formik.values.contactPersonEmail}
-          onChange={formik.handleChange("contactPersonEmail")}
-          onBlur={formik.handleBlur("contactPersonEmail")}
-          showError={!!(formik.touched.contactPersonEmail && formik.errors.contactPersonEmail)}
-          error={formik.errors.contactPersonEmail}
+          {...inputProps(formik, "contactPersonEmail")}
         />
         <InputField
           label="Phone"
           type="tel"
           placeholder="+8801XXXXXXXXX"
           required
-          value={formik.values.contactPersonPhone}
-          onChange={formik.handleChange("contactPersonPhone")}
-          onBlur={formik.handleBlur("contactPersonPhone")}
-          showError={!!(formik.touched.contactPersonPhone && formik.errors.contactPersonPhone)}
-          error={formik.errors.contactPersonPhone}
+          {...inputProps(formik, "contactPersonPhone")}
         />
 
         <p className="form-section">Location</p>
@@ -193,51 +185,31 @@ export default function OutletEntry({
           rows={2}
           required
           className="form-span-2"
-          value={formik.values.address}
-          onChange={formik.handleChange("address")}
-          onBlur={formik.handleBlur("address")}
-          showError={!!(formik.touched.address && formik.errors.address)}
-          error={formik.errors.address}
+          {...inputProps(formik, "address")}
         />
         <InputField
           label="City"
           placeholder="City"
           required
-          value={formik.values.city}
-          onChange={formik.handleChange("city")}
-          onBlur={formik.handleBlur("city")}
-          showError={!!(formik.touched.city && formik.errors.city)}
-          error={formik.errors.city}
+          {...inputProps(formik, "city")}
         />
         <InputField
           label="State"
           placeholder="State"
           required
-          value={formik.values.state}
-          onChange={formik.handleChange("state")}
-          onBlur={formik.handleBlur("state")}
-          showError={!!(formik.touched.state && formik.errors.state)}
-          error={formik.errors.state}
+          {...inputProps(formik, "state")}
         />
         <InputField
           label="Zip Code"
           placeholder="Zip Code"
           required
-          value={formik.values.zipCode}
-          onChange={formik.handleChange("zipCode")}
-          onBlur={formik.handleBlur("zipCode")}
-          showError={!!(formik.touched.zipCode && formik.errors.zipCode)}
-          error={formik.errors.zipCode}
+          {...inputProps(formik, "zipCode")}
         />
         <InputField
           label="Country"
           placeholder="Country"
           required
-          value={formik.values.country}
-          onChange={formik.handleChange("country")}
-          onBlur={formik.handleBlur("country")}
-          showError={!!(formik.touched.country && formik.errors.country)}
-          error={formik.errors.country}
+          {...inputProps(formik, "country")}
         />
 
         <p className="form-section">Login Account</p>
@@ -247,13 +219,17 @@ export default function OutletEntry({
           placeholder="manager@outlet.com"
           autoComplete="off"
           required
-          hint="This account is created as the outlet's Admin"
-          className="form-span-2"
-          value={formik.values.userEmail}
-          onChange={formik.handleChange("userEmail")}
-          onBlur={formik.handleBlur("userEmail")}
-          showError={!!(formik.touched.userEmail && formik.errors.userEmail)}
-          error={formik.errors.userEmail}
+          hint="The outlet's own login account"
+          {...inputProps(formik, "userEmail")}
+        />
+        <CustomSelectField
+          label="Login Role"
+          placeholder="Select role"
+          options={roles.options}
+          disabled={roles.loading}
+          required
+          hint="Decides what this outlet account can see and do"
+          {...selectProps(formik, "userRoleId")}
         />
         <InputField
           label={hasAccount ? "New Password" : "Password"}
@@ -261,12 +237,10 @@ export default function OutletEntry({
           placeholder="••••••••"
           autoComplete="new-password"
           required={!hasAccount}
-          hint={hasAccount ? "Leave blank to keep the current password" : undefined}
-          value={formik.values.userPassword}
-          onChange={formik.handleChange("userPassword")}
-          onBlur={formik.handleBlur("userPassword")}
-          showError={!!(formik.touched.userPassword && formik.errors.userPassword)}
-          error={formik.errors.userPassword}
+          hint={
+            hasAccount ? "Leave blank to keep the current password" : undefined
+          }
+          {...inputProps(formik, "userPassword")}
         />
         <InputField
           label="Confirm Password"
@@ -274,11 +248,7 @@ export default function OutletEntry({
           placeholder="••••••••"
           autoComplete="new-password"
           required={!hasAccount}
-          value={formik.values.userConfirmPassword}
-          onChange={formik.handleChange("userConfirmPassword")}
-          onBlur={formik.handleBlur("userConfirmPassword")}
-          showError={!!(formik.touched.userConfirmPassword && formik.errors.userConfirmPassword)}
-          error={formik.errors.userConfirmPassword}
+          {...inputProps(formik, "userConfirmPassword")}
         />
         <CustomSwitch
           name="status"

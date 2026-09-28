@@ -1,0 +1,6 @@
+{
+  "watch": ["backend", "package.json", "frontend/package.json", "scripts/generate-readme.js"],
+  "ignore": ["backend/uploads/**"],
+  "ext": "js,json",
+  "exec": "node scripts/generate-readme.js && node backend/server.js"
+}

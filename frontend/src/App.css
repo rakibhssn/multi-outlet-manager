@@ -435,11 +435,11 @@
 
 /* ---------- Tabs ---------- */
 .tabs {
-  @apply w-full;
+  @apply w-full flex-col gap-0;
 }
 
 .tabs-list {
-  @apply rounded-md;
+  @apply h-10 w-fit max-w-full overflow-x-auto rounded-md;
 }
 
 .tabs-trigger {
@@ -538,7 +538,7 @@
 }
 
 .table-wrap {
-  @apply overflow-hidden rounded-md border;
+  @apply overflow-x-auto rounded-md border;
 }
 
 .table-head {
@@ -662,6 +662,42 @@
   @apply flex items-center gap-2;
 }
 
+.shift-button {
+  @apply flex items-center gap-2;
+}
+
+.shift-button-status {
+  @apply hidden items-center gap-1.5 text-xs font-semibold text-emerald-700 sm:inline-flex dark:text-emerald-400;
+}
+
+.shift-dot {
+  @apply size-2 animate-pulse rounded-full bg-emerald-500;
+}
+
+.shift-button-status-break {
+  @apply text-espresso dark:text-saffron;
+}
+
+.shift-button-status-break .shift-dot {
+  @apply bg-saffron;
+}
+
+.break-list {
+  @apply flex flex-col gap-0.5 text-xs;
+}
+
+.break-item {
+  @apply whitespace-nowrap text-muted-foreground tabular-nums;
+}
+
+.break-item-open {
+  @apply font-semibold text-espresso dark:text-saffron;
+}
+
+.shift-actions {
+  @apply flex justify-end gap-2;
+}
+
 .account-box {
   @apply flex items-center gap-2.5 rounded-full border bg-card py-1 pr-3 pl-1 shadow-xs transition-shadow outline-none hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50;
 }
@@ -714,6 +750,147 @@
   @apply size-4;
 }
 
+.roles-layout {
+  @apply grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)];
+}
+.roles-list {
+  @apply flex flex-col gap-4;
+}
+.roles-section {
+  @apply flex flex-col gap-1.5;
+}
+.roles-section-label {
+  @apply px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase;
+}
+.role-item {
+  @apply flex w-full flex-col gap-0.5 rounded-md border bg-background/60 px-3 py-2.5 text-left transition-colors hover:bg-accent/50;
+}
+.role-item-active {
+  @apply border-primary bg-primary/5 hover:bg-primary/5;
+}
+.role-item-name {
+  @apply flex items-center gap-1.5 text-sm font-medium;
+}
+.role-item-name svg {
+  @apply size-3.5 shrink-0 text-primary;
+}
+.role-item-status {
+  @apply ml-auto;
+}
+.role-item-meta {
+  @apply truncate text-xs text-muted-foreground;
+}
+.roles-new {
+  @apply w-full;
+}
+.role-editor {
+  @apply flex min-w-0 flex-col gap-4;
+}
+.role-toolbar {
+  @apply flex flex-col gap-3 rounded-lg border bg-background/60 p-4 md:flex-row md:flex-wrap md:items-end;
+}
+.role-name-field {
+  @apply md:w-56;
+}
+.role-description-field {
+  @apply min-w-0 md:flex-1;
+}
+.role-toolbar-actions {
+  @apply flex flex-wrap items-end gap-3;
+}
+.role-notice {
+  @apply flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground;
+}
+.role-notice svg {
+  @apply mt-0.5 size-4 shrink-0 text-primary;
+}
+.perm-table {
+  @apply overflow-hidden rounded-lg border bg-background/60;
+}
+.perm-group {
+  @apply flex flex-col gap-2 border-b px-4 py-3 last:border-b-0 md:flex-row md:gap-6;
+}
+.perm-area {
+  @apply shrink-0 text-sm font-semibold md:w-36 md:pt-0.5;
+}
+.perm-row {
+  @apply flex flex-wrap gap-x-6 gap-y-2.5;
+}
+.perm-item .checkbox-label {
+  @apply flex items-center gap-1.5 font-normal;
+}
+.perm-kind {
+  @apply rounded-md bg-muted px-1.5 py-px text-[10px] font-medium tracking-wide text-muted-foreground uppercase;
+}
+.role-footnote {
+  @apply text-xs text-muted-foreground;
+}
+
+.account-tab {
+  @apply flex flex-col gap-4 pt-2;
+}
+.account-role {
+  @apply flex items-start gap-1.5 text-sm text-muted-foreground;
+}
+.account-role svg {
+  @apply mt-0.5 size-4 shrink-0 text-primary;
+}
+.account-role strong {
+  @apply font-semibold text-foreground;
+}
+.account-grid {
+  @apply grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3;
+}
+.account-note {
+  @apply text-xs text-muted-foreground;
+}
+.account-card {
+  @apply flex flex-col gap-4 rounded-lg border bg-background/60 p-4 md:p-5;
+}
+.account-card-head {
+  @apply flex flex-col gap-1;
+}
+.account-card-head-row {
+  @apply gap-3 sm:flex-row sm:items-start sm:justify-between;
+}
+.account-card-title {
+  @apply text-base font-semibold;
+}
+.account-card-text {
+  @apply max-w-xl text-sm text-muted-foreground;
+}
+.account-form {
+  @apply flex max-w-md flex-col gap-4;
+}
+.account-submit {
+  @apply self-start;
+}
+.session-list {
+  @apply flex flex-col divide-y rounded-md border;
+}
+.session-row {
+  @apply flex items-center gap-3 px-3 py-2.5;
+}
+.session-icon {
+  @apply size-5 shrink-0 text-muted-foreground;
+}
+.session-info {
+  @apply flex min-w-0 flex-1 flex-col gap-0.5;
+}
+
+.no-access {
+  @apply flex flex-col items-center justify-center gap-2 p-10 text-center;
+}
+.no-access-icon {
+  @apply size-10 text-muted-foreground;
+}
+.no-access-title {
+  @apply font-serif text-lg font-semibold;
+}
+.no-access-text {
+  @apply max-w-sm text-sm text-muted-foreground;
+}
+
 /* =========================================================
    Dashboard
    ========================================================= */
@@ -764,6 +941,50 @@
   @apply size-4;
 }
 
+.stat-card {
+  @apply flex min-h-32 flex-col gap-1.5 rounded-lg border bg-background/60 p-4;
+}
+
+.stat-card-action {
+  @apply cursor-pointer text-left transition hover:border-primary/60 hover:shadow-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-default disabled:hover:border-border disabled:hover:shadow-none;
+}
+
+.stat-card-value {
+  @apply mt-1 font-serif text-3xl font-semibold tracking-tight tabular-nums;
+}
+
+.stat-card-currency {
+  @apply mr-0.5 font-sans text-2xl font-semibold text-muted-foreground;
+}
+
+.stat-card-meta {
+  @apply inline-flex items-center gap-1 text-xs font-semibold;
+}
+
+.stat-card-meta-up {
+  @apply text-emerald-600 dark:text-emerald-400;
+}
+
+.stat-card-meta-down {
+  @apply text-destructive;
+}
+
+.stat-card-meta-alert {
+  @apply text-destructive;
+}
+
+.stat-card-meta-muted {
+  @apply text-muted-foreground;
+}
+
+.stat-card-skeleton {
+  @apply h-4 w-24 animate-pulse rounded-md bg-muted;
+}
+
+.stat-card-skeleton-value {
+  @apply mt-1 h-8 w-32;
+}
+
 .stat-slot-body {
   @apply flex-1 rounded-md border border-dashed;
 }
@@ -794,6 +1015,256 @@
 
 .view-box-body {
   @apply flex-1 p-4;
+}
+
+.hq-orders-dialog {
+  @apply sm:max-w-5xl;
+}
+
+.trend {
+  @apply flex flex-col gap-3 transition-opacity;
+}
+
+.trend-refreshing {
+  @apply opacity-60;
+}
+
+.trend-legend {
+  @apply flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground;
+}
+
+.trend-legend li {
+  @apply flex items-center gap-1.5;
+}
+
+.trend-key {
+  @apply h-0.5 w-4 rounded-full;
+}
+
+.trend-frame {
+  @apply relative w-full;
+}
+
+.trend-svg {
+  @apply block overflow-visible;
+}
+
+.trend-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.trend-tick {
+  @apply fill-muted-foreground text-[11px] tabular-nums;
+}
+
+.trend-line {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.trend-dot {
+  stroke: var(--background);
+  stroke-width: 2;
+}
+
+.trend-crosshair {
+  stroke: var(--muted-foreground);
+  stroke-width: 1;
+}
+
+.trend-end {
+  @apply text-xs;
+}
+
+.trend-end-name {
+  @apply fill-foreground font-medium;
+}
+
+.trend-end-value {
+  @apply fill-muted-foreground tabular-nums;
+}
+
+.trend-hit {
+  @apply absolute cursor-crosshair rounded-sm focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none;
+}
+
+.trend-tip {
+  @apply pointer-events-none absolute top-2 z-20 ml-3 flex min-w-44 flex-col gap-1 rounded-md border bg-popover px-3 py-2 text-xs text-muted-foreground shadow-md;
+}
+
+.trend-hit-point {
+  @apply cursor-pointer;
+}
+
+.trend-point-tip {
+  @apply min-w-56 -translate-y-full;
+}
+
+.trend-point-tip.trend-tip-left {
+  @apply -translate-x-full -translate-y-full;
+}
+
+.trend-point-row {
+  @apply flex flex-col gap-0.5;
+}
+
+.trend-point-sub {
+  @apply pl-5 text-[11px];
+}
+
+.trend-tip-left {
+  @apply -translate-x-full -ml-3;
+}
+
+.trend-tip-day {
+  @apply font-medium text-foreground;
+}
+
+.trend-tip-row {
+  @apply flex items-center gap-2;
+}
+
+.trend-tip-row strong {
+  @apply font-semibold text-foreground tabular-nums;
+}
+
+.trend-tip-key {
+  @apply h-0.5 w-3 shrink-0 rounded-full;
+}
+
+.trend-table-wrap {
+  @apply overflow-x-auto;
+}
+
+.trend-table {
+  @apply w-full text-xs;
+}
+
+.trend-table th {
+  @apply border-b px-2 py-1.5 text-right font-semibold whitespace-nowrap text-muted-foreground first:text-left;
+}
+
+.trend-table td {
+  @apply border-b px-2 py-1.5 text-right tabular-nums first:text-left first:font-medium;
+}
+
+.activity-list {
+  @apply flex max-h-[26rem] flex-col overflow-y-auto;
+}
+
+.activity-item {
+  @apply grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-md px-1.5 py-2 text-left;
+}
+
+button.activity-item {
+  @apply transition-colors hover:bg-muted/60;
+}
+
+.activity-icon {
+  @apply grid size-7 shrink-0 place-items-center rounded-full [&_svg]:size-3.5;
+}
+
+.activity-body {
+  @apply flex min-w-0 flex-col gap-0.5;
+}
+
+.activity-body .cell-sub {
+  @apply whitespace-normal;
+}
+
+.activity-title {
+  @apply text-sm font-medium;
+}
+
+.activity-time {
+  @apply shrink-0 pt-0.5 text-xs whitespace-nowrap text-muted-foreground;
+}
+
+.view-box-link {
+  @apply text-xs font-semibold text-primary hover:underline;
+}
+
+.dashboard-empty {
+  @apply grid h-48 place-items-center rounded-md border border-dashed text-sm text-muted-foreground;
+}
+
+.today-list {
+  @apply flex flex-col divide-y;
+}
+
+.today-row {
+  @apply grid grid-cols-[4.5rem_minmax(0,1fr)_auto_auto] items-center gap-3 px-1 py-2.5 text-left text-sm transition hover:bg-muted/50 sm:grid-cols-[4.5rem_minmax(0,1fr)_9rem_6rem_6.5rem];
+}
+
+.today-time {
+  @apply text-xs text-muted-foreground tabular-nums;
+}
+
+.today-server {
+  @apply hidden sm:block;
+}
+
+.today-amount {
+  @apply text-right font-semibold tabular-nums;
+}
+
+.today-row .status-badge {
+  @apply hidden sm:inline-flex;
+}
+
+.live-list {
+  @apply flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1;
+}
+
+.live-card {
+  @apply flex items-start gap-3 rounded-md border bg-card px-2.5 py-2;
+}
+
+.live-card-info {
+  @apply flex min-w-0 flex-1 flex-col gap-0.5 leading-tight;
+}
+
+.live-card-info .cell-title,
+.live-card-info .cell-sub {
+  @apply overflow-visible whitespace-normal break-words;
+}
+
+.live-card-info .cell-title {
+  @apply text-[13px];
+}
+
+.live-card-side {
+  @apply flex shrink-0 flex-col items-end gap-1.5;
+}
+
+.live-age {
+  @apply shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground tabular-nums;
+}
+
+.live-age-warn {
+  @apply bg-saffron/25 text-espresso dark:text-saffron;
+}
+
+.live-age-late {
+  @apply bg-destructive/10 text-destructive;
+}
+
+.live-actions {
+  @apply flex gap-1;
+}
+
+.live-btn {
+  @apply h-6 gap-1 px-2 text-[11px] [&_svg]:size-3;
+}
+
+.live-items {
+  @apply text-xs leading-snug text-foreground/90;
+}
+
+.live-qty {
+  @apply font-semibold tabular-nums;
 }
 
 .view-box-empty {
@@ -941,4 +1412,906 @@
 
 .price-base {
   @apply text-xs text-muted-foreground line-through;
+}
+
+/* ---------- Image field ---------- */
+.image-field {
+  @apply flex gap-3;
+}
+
+.image-field-preview {
+  @apply relative grid size-28 shrink-0 place-items-center overflow-hidden rounded-md border bg-muted/40 text-muted-foreground;
+}
+.image-field-preview img {
+  @apply size-full object-cover;
+}
+.image-field-preview > svg {
+  @apply size-7;
+}
+
+.image-field-remove {
+  @apply absolute top-1 right-1 grid size-6 place-items-center rounded-full bg-background/90 text-muted-foreground shadow-sm transition-colors hover:bg-destructive hover:text-white;
+}
+.image-field-remove svg {
+  @apply size-3.5;
+}
+
+.image-field-drop {
+  @apply flex min-h-28 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border bg-muted/40 px-4 text-center transition-colors outline-none hover:border-primary/50 hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50;
+}
+
+.image-field-drop-icon {
+  @apply mb-1 size-5 text-primary;
+}
+
+.image-field-or {
+  @apply text-xs font-medium text-muted-foreground;
+}
+
+.menu-info {
+  @apply flex flex-col gap-4 lg:flex-row;
+}
+
+.menu-info-image {
+  @apply grid aspect-square w-full shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted/40 text-muted-foreground lg:w-56;
+}
+.menu-info-image img {
+  @apply size-full object-cover;
+}
+.menu-info-image > svg {
+  @apply size-10;
+}
+
+.menu-info-grid {
+  @apply flex-1 md:grid-cols-2 xl:grid-cols-3;
+}
+
+.assign-outlet-grid {
+  @apply grid-cols-1 sm:grid-cols-2;
+}
+
+.assign-outlet-empty {
+  @apply rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground;
+}
+
+.outlet-lists {
+  @apply grid grid-cols-1 items-start gap-4 xl:grid-cols-2;
+}
+
+.outlet-lists .table-toolbar {
+  @apply md:flex-col md:items-stretch;
+}
+
+.outlet-lists .table-tools {
+  @apply md:ml-0;
+}
+
+.outlet-lists .table-search {
+  @apply min-w-44 flex-1;
+}
+
+.outlet-lists .table-filter {
+  @apply w-full sm:w-40;
+}
+
+/* ---------- Assign with price ---------- */
+.assign-price-list {
+  @apply flex max-h-[55svh] flex-col overflow-y-auto rounded-md border;
+}
+
+.assign-price-head {
+  @apply sticky top-0 z-10 flex items-center justify-between border-b bg-muted/60 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase;
+}
+
+.assign-price-row {
+  @apply flex items-center justify-between gap-3 border-b px-3 py-2.5 last:border-b-0;
+}
+
+.assign-price-row-active {
+  @apply bg-primary/5;
+}
+
+.assign-price-label {
+  @apply flex min-w-0 flex-1 cursor-pointer items-center gap-3;
+}
+
+.assign-price-input {
+  @apply h-9 w-28 shrink-0 rounded-md border border-input bg-transparent px-2.5 text-right text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+.assign-price-input-invalid {
+  @apply border-destructive ring-3 ring-destructive/20;
+}
+
+.price-override {
+  @apply font-semibold text-primary;
+}
+
+.price-inherit {
+  @apply text-muted-foreground;
+}
+
+.item-outlets-dialog {
+  @apply max-h-[90svh] overflow-y-auto sm:max-w-3xl;
+}
+
+.table-card-plain {
+  @apply border-0 p-0 shadow-none;
+}
+
+.assign-item-body {
+  @apply flex flex-col gap-4;
+}
+
+.assign-price-head-fields {
+  @apply flex gap-2;
+}
+.assign-price-head-fields > span:first-child {
+  @apply w-28 text-right;
+}
+.assign-price-head-fields > span:last-child {
+  @apply w-20 text-right;
+}
+
+.assign-stock-input {
+  @apply w-20;
+}
+
+.stock-count {
+  @apply font-semibold tabular-nums;
+}
+
+.stock-out {
+  @apply inline-flex rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive;
+}
+
+
+/* ---------- Outlet summary ---------- */
+.summary-card {
+  @apply flex flex-col gap-3 rounded-lg border bg-background/60 p-4;
+}
+
+.summary-hero {
+  @apply relative flex items-center justify-between gap-3 overflow-hidden rounded-md border border-primary/15 bg-linear-to-br from-primary/12 via-saffron/10 to-transparent p-3.5;
+}
+
+.summary-hero::after {
+  content: "";
+  @apply pointer-events-none absolute -top-8 -right-8 size-24 rounded-full bg-primary/10 blur-2xl;
+}
+
+.summary-hero-text {
+  @apply relative z-10 flex min-w-0 flex-col;
+}
+
+.summary-hero-label {
+  @apply text-xs font-medium text-muted-foreground;
+}
+
+.summary-hero-value {
+  @apply font-serif text-2xl leading-tight font-semibold tracking-tight tabular-nums;
+}
+
+.summary-hero-note {
+  @apply text-[11px] text-muted-foreground;
+}
+
+.summary-hero-icon {
+  @apply relative z-10 grid size-10 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm shadow-primary/30;
+}
+.summary-hero-icon svg {
+  @apply size-5;
+}
+
+.summary-tiles {
+  @apply grid grid-cols-3 gap-2;
+}
+
+.summary-tile {
+  @apply relative flex min-w-0 flex-col items-start gap-1 rounded-md border bg-card p-2.5 text-left;
+}
+
+.summary-tile-action {
+  @apply transition-all enabled:hover:-translate-y-0.5 enabled:hover:shadow-md disabled:cursor-default;
+}
+
+.summary-tile-alert {
+  @apply border-destructive/30 bg-destructive/5 enabled:hover:border-destructive/50;
+}
+
+.summary-tile-icon {
+  @apply grid size-7 place-items-center rounded-md;
+}
+.summary-tile-icon svg {
+  @apply size-4;
+}
+
+.summary-tile-icon-neutral {
+  @apply bg-muted text-foreground/70;
+}
+
+.summary-tile-icon-good {
+  @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400;
+}
+
+.summary-tile-icon-bad {
+  @apply bg-destructive/10 text-destructive;
+}
+
+.summary-tile-value {
+  @apply text-xl leading-none font-semibold tabular-nums;
+}
+
+.summary-tile-label {
+  @apply w-full truncate text-[11px] leading-tight font-medium whitespace-nowrap text-muted-foreground;
+}
+
+.summary-tile-alert .summary-tile-label {
+  @apply text-destructive;
+}
+
+.summary-tile-arrow {
+  @apply absolute top-2 right-2 size-3.5 text-destructive transition-transform;
+}
+
+.summary-tile-action:hover .summary-tile-arrow {
+  @apply translate-x-0.5 -translate-y-0.5;
+}
+
+.summary-meter {
+  @apply mt-auto flex flex-col gap-1.5;
+}
+
+.summary-meter-head {
+  @apply flex items-center justify-between text-xs text-muted-foreground;
+}
+
+.summary-meter-value {
+  @apply font-semibold tabular-nums;
+}
+
+.summary-meter-good {
+  @apply text-emerald-700 dark:text-emerald-400;
+}
+
+.summary-meter-warn {
+  @apply text-espresso dark:text-saffron;
+}
+
+.summary-meter-bad {
+  @apply text-destructive;
+}
+
+.summary-meter-idle {
+  @apply text-muted-foreground;
+}
+
+.summary-meter-track {
+  @apply h-2 w-full overflow-hidden rounded-full bg-muted;
+}
+
+.summary-meter-fill {
+  @apply block h-full rounded-full transition-[width] duration-500;
+}
+
+.summary-meter-fill-good {
+  @apply bg-emerald-500;
+}
+
+.summary-meter-fill-warn {
+  @apply bg-saffron;
+}
+
+.summary-meter-fill-bad {
+  @apply bg-destructive;
+}
+
+.summary-meter-fill-idle {
+  @apply bg-transparent;
+}
+
+.page-meta {
+  @apply flex flex-wrap items-center gap-x-2.5 gap-y-1;
+}
+
+/* ---------- Outlet daily sales ---------- */
+.sales-card {
+  @apply flex flex-col gap-3 rounded-lg border bg-background/60 p-4;
+}
+
+.sales-card-head {
+  @apply flex items-start justify-between gap-3 border-b pb-2;
+}
+
+.sales-card-heading {
+  @apply flex min-w-0 flex-col gap-0.5;
+}
+
+.sales-card-title {
+  @apply flex items-center gap-2 border-0 pb-1;
+}
+
+.sales-sample-badge {
+  @apply rounded-full border border-dashed border-muted-foreground/40 px-2 py-px text-[10px] font-medium tracking-normal text-muted-foreground normal-case;
+}
+
+.sales-card-total {
+  @apply font-serif text-2xl leading-tight font-semibold tracking-tight tabular-nums;
+}
+
+.sales-card-caption {
+  @apply text-xs text-muted-foreground;
+}
+
+.sales-card-icon {
+  @apply grid size-9 shrink-0 place-items-center rounded-md bg-chart-1/10 text-chart-1;
+}
+.sales-card-icon svg {
+  @apply size-4.5;
+}
+
+.sales-chart {
+  @apply relative flex min-h-44 flex-1 flex-col pt-4;
+}
+
+.sales-grid {
+  @apply pointer-events-none absolute inset-x-0 top-4 bottom-6 pl-8;
+}
+
+.sales-grid-line {
+  @apply absolute inset-x-0 ml-8 border-t border-border;
+}
+
+.sales-grid-label {
+  @apply absolute -top-2 -left-8 w-7 text-right text-[10px] leading-none text-muted-foreground tabular-nums;
+}
+
+.sales-bars {
+  @apply relative z-10 flex flex-1 items-stretch gap-0.5;
+}
+
+.sales-bars-axis {
+  @apply pl-8;
+}
+
+.sales-bar-slot {
+  @apply flex min-w-0 flex-1 cursor-default flex-col items-center gap-1.5 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50;
+}
+
+.sales-bar-track {
+  @apply relative flex w-full flex-1 items-end justify-center;
+}
+
+.sales-bar {
+  @apply block w-full max-w-6 rounded-t-[4px] bg-chart-1 transition-[filter,height] duration-300;
+}
+
+.sales-bar-active {
+  @apply brightness-110;
+}
+
+.sales-bar-empty {
+  @apply h-0.5 rounded-none bg-border;
+}
+
+.sales-bar-peak {
+  @apply absolute left-1/2 mb-1 -translate-x-1/2 text-[10px] font-semibold whitespace-nowrap text-foreground tabular-nums;
+}
+
+.sales-bar-day {
+  @apply h-4 text-[10px] leading-4 font-medium text-muted-foreground;
+}
+
+.sales-bar-day-active {
+  @apply text-foreground;
+}
+
+.sales-tooltip {
+  @apply pointer-events-none absolute top-0 z-20 flex -translate-x-1/2 flex-col items-center rounded-md border bg-popover px-2.5 py-1.5 text-center shadow-md;
+}
+
+.sales-tooltip-value {
+  @apply text-sm font-semibold text-foreground tabular-nums;
+}
+
+.sales-tooltip-label {
+  @apply text-[11px] whitespace-nowrap text-muted-foreground;
+}
+
+.sales-empty {
+  @apply pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs text-muted-foreground;
+}
+
+.transfer-current {
+  @apply flex flex-col gap-0.5 rounded-md border border-dashed bg-muted/40 px-3 py-2.5;
+}
+
+.transfer-current-label {
+  @apply text-xs font-medium uppercase tracking-wide text-muted-foreground;
+}
+
+.posting-current {
+  @apply inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary;
+}
+
+.worked-count {
+  @apply inline-flex min-w-8 items-center justify-center rounded-md bg-secondary px-2 py-0.5 text-sm font-semibold tabular-nums text-secondary-foreground transition-colors hover:bg-accent;
+}
+
+.pos {
+  @apply grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem];
+}
+
+.pos-menu {
+  @apply flex min-w-0 flex-col gap-4 rounded-md border bg-card p-4 shadow-xs;
+}
+
+.pos-toolbar {
+  @apply flex flex-col gap-3 sm:flex-row;
+}
+
+.pos-search {
+  @apply sm:flex-1;
+}
+
+.pos-filter {
+  @apply sm:w-56;
+}
+
+.pos-grid {
+  @apply grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4;
+}
+
+.pos-item {
+  @apply relative flex flex-col overflow-hidden rounded-md border bg-background text-left transition hover:border-primary/60 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.pos-item-active {
+  @apply border-primary ring-2 ring-primary/20;
+}
+
+.pos-item-image {
+  @apply aspect-[4/3] w-full object-cover;
+}
+
+.pos-item-image-empty {
+  @apply grid place-items-center bg-primary/10 font-serif text-3xl font-semibold text-primary uppercase;
+}
+
+.pos-item-qty {
+  @apply absolute top-2 right-2 grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow;
+}
+
+.pos-item-body {
+  @apply flex flex-1 flex-col gap-0.5 p-2.5;
+}
+
+.pos-item-name {
+  @apply line-clamp-2 text-sm font-semibold;
+}
+
+.pos-item-foot {
+  @apply mt-auto flex items-center justify-between gap-2 pt-1.5;
+}
+
+.pos-item-price {
+  @apply text-sm font-bold text-primary tabular-nums;
+}
+
+.pos-item-stock {
+  @apply text-xs text-muted-foreground;
+}
+
+.pos-item-stock-low {
+  @apply font-semibold text-destructive;
+}
+
+.pos-empty {
+  @apply rounded-md border border-dashed p-10 text-center text-sm text-muted-foreground;
+}
+
+.pos-more {
+  @apply self-center;
+}
+
+.pos-cart {
+  @apply flex flex-col gap-4 rounded-md border bg-card p-4 shadow-xs lg:sticky lg:top-4;
+}
+
+.pos-cart-head {
+  @apply flex items-center justify-between border-b pb-3;
+}
+
+.pos-cart-title {
+  @apply flex items-center gap-2 font-serif text-lg font-semibold;
+}
+
+.pos-cart-clear {
+  @apply flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground;
+}
+
+.pos-cart-fields {
+  @apply grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2;
+}
+
+.pos-lines {
+  @apply flex max-h-72 flex-col gap-2 overflow-y-auto;
+}
+
+.pos-lines-empty {
+  @apply rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground;
+}
+
+.pos-line {
+  @apply grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 gap-y-1 rounded-md border bg-background p-2;
+}
+
+.pos-line-info {
+  @apply col-span-3 flex min-w-0 flex-col;
+}
+
+.pos-stepper {
+  @apply flex items-center overflow-hidden rounded-md border;
+}
+
+.pos-stepper button {
+  @apply grid size-7 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40;
+}
+
+.pos-stepper span {
+  @apply min-w-8 text-center text-sm font-semibold tabular-nums;
+}
+
+.pos-line-total {
+  @apply justify-self-end text-sm font-semibold tabular-nums;
+}
+
+.pos-line-remove {
+  @apply grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive;
+}
+
+.pos-summary {
+  @apply flex items-center justify-between border-t pt-3 text-sm text-muted-foreground;
+}
+
+.pos-summary-total {
+  @apply font-serif text-2xl font-semibold text-foreground tabular-nums;
+}
+
+.order-confirm-dialog,
+.order-details-dialog {
+  @apply max-h-[90svh] overflow-y-auto sm:max-w-lg;
+}
+
+.order-confirm-meta {
+  @apply grid grid-cols-2 gap-3 rounded-md border border-dashed bg-muted/40 p-3 text-sm;
+}
+
+.order-confirm-meta dt {
+  @apply text-xs text-muted-foreground;
+}
+
+.order-confirm-meta dd {
+  @apply font-medium;
+}
+
+.order-lines {
+  @apply flex flex-col divide-y rounded-md border;
+}
+
+.order-line {
+  @apply flex items-center justify-between gap-3 px-3 py-2;
+}
+
+.order-line-total {
+  @apply shrink-0 font-semibold tabular-nums;
+}
+
+.order-line-total-row {
+  @apply bg-muted/40 font-semibold;
+}
+
+.order-confirm-note {
+  @apply rounded-md bg-saffron/15 px-3 py-2 text-sm;
+}
+
+.order-done {
+  @apply flex flex-col items-center gap-1 py-4 text-center;
+}
+
+.order-done-icon {
+  @apply mb-2 size-12 text-emerald-600;
+}
+
+.order-done-number {
+  @apply font-serif text-2xl font-semibold;
+}
+
+.order-cancel-btn {
+  @apply text-destructive hover:text-destructive sm:mr-auto;
+}
+
+.order-cancel-ask {
+  @apply sm:items-center;
+}
+
+.order-cancel-text {
+  @apply text-sm text-muted-foreground sm:mr-auto;
+}
+
+.order-slip-dialog {
+  @apply max-h-[90svh] overflow-y-auto sm:max-w-sm;
+}
+
+.order-slip {
+  @apply mx-auto flex w-full max-w-[80mm] flex-col gap-3 rounded-md border border-dashed bg-white p-4 font-mono text-xs text-neutral-900;
+}
+
+.order-slip-head {
+  @apply flex flex-col items-center gap-0.5 text-center;
+}
+
+.order-slip-brand {
+  @apply text-sm font-bold uppercase;
+}
+
+.order-slip-outlet {
+  @apply font-semibold;
+}
+
+.order-slip-muted {
+  @apply block text-[10px] text-neutral-500;
+}
+
+.order-slip-title {
+  @apply border-y border-dashed border-neutral-400 py-1 text-center font-bold tracking-widest uppercase;
+}
+
+.order-slip-meta {
+  @apply grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5;
+}
+
+.order-slip-meta dt {
+  @apply text-neutral-500;
+}
+
+.order-slip-meta dd {
+  @apply text-right font-medium;
+}
+
+.order-slip-lines {
+  @apply flex flex-col gap-1 border-t border-dashed border-neutral-400 pt-2;
+}
+
+.order-slip-line {
+  @apply grid grid-cols-[1fr_2rem_4.5rem] gap-2;
+}
+
+.order-slip-line > span:not(:first-child) {
+  @apply text-right tabular-nums;
+}
+
+.order-slip-line-head {
+  @apply font-bold uppercase;
+}
+
+.order-slip-item {
+  @apply min-w-0 break-words;
+}
+
+.order-slip-total {
+  @apply flex justify-between border-y border-dashed border-neutral-400 py-1.5 text-sm font-bold;
+}
+
+.order-slip-note {
+  @apply break-words;
+}
+
+.order-slip-foot {
+  @apply text-center text-neutral-500;
+}
+
+.report-actions {
+  @apply flex flex-wrap gap-2;
+}
+
+.report-tabs {
+  @apply gap-0;
+}
+
+.report-tabs-list {
+  @apply h-auto w-full flex-wrap justify-start;
+}
+
+.report-controls {
+  @apply grid gap-3 rounded-md border bg-card p-4 shadow-xs sm:grid-cols-2 lg:grid-cols-4;
+}
+
+.report-presets {
+  @apply flex flex-wrap gap-2 sm:col-span-2 lg:col-span-4;
+}
+
+.report-presets-disabled {
+  @apply opacity-50;
+}
+
+.report-preset {
+  @apply rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:hover:border-border;
+}
+
+.report-live {
+  @apply -mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground;
+}
+
+.report-loader {
+  @apply flex h-96 flex-col items-center justify-center gap-3 rounded-md border bg-muted/40 text-sm font-medium text-muted-foreground;
+}
+
+.report-loader-overlay {
+  @apply absolute inset-0 h-auto rounded-md border-0 bg-background/70 backdrop-blur-[1px];
+}
+
+.report-loader-icon {
+  @apply size-7 text-primary;
+}
+
+.report-failed {
+  @apply flex h-48 flex-col items-center justify-center gap-3 rounded-md border border-dashed text-sm text-muted-foreground;
+}
+
+.report-frame {
+  @apply relative overflow-x-auto rounded-md border bg-muted/40 p-3 sm:p-6;
+}
+
+.report-sheet {
+  @apply mx-auto flex w-full max-w-4xl min-w-[40rem] flex-col gap-5 rounded-md bg-white p-8 text-sm text-neutral-900 shadow-sm;
+}
+
+.report-head {
+  @apply flex items-start justify-between gap-6 border-b-2 border-neutral-900 pb-4;
+}
+
+.report-head-outlet,
+.report-head-meta {
+  @apply flex flex-col gap-0.5;
+}
+
+.report-head-meta {
+  @apply items-end text-right;
+}
+
+.report-brand {
+  @apply text-xs font-bold tracking-widest text-neutral-500 uppercase;
+}
+
+.report-outlet {
+  @apply font-serif text-xl font-semibold;
+}
+
+.report-title {
+  @apply font-serif text-2xl font-semibold;
+}
+
+.report-period {
+  @apply font-semibold;
+}
+
+.report-muted {
+  @apply text-xs text-neutral-500;
+}
+
+.report-summary {
+  @apply grid grid-cols-3 gap-3;
+}
+
+.report-summary-item {
+  @apply flex flex-col gap-0.5 rounded-md border border-neutral-200 px-3 py-2;
+}
+
+.report-summary-item dt {
+  @apply text-xs text-neutral-500;
+}
+
+.report-summary-item dd {
+  @apply truncate text-base font-semibold tabular-nums;
+}
+
+.report-table {
+  @apply w-full border-collapse text-sm;
+}
+
+.report-table th {
+  @apply border-b border-neutral-300 bg-neutral-100 px-2 py-2 text-left text-xs font-semibold tracking-wide text-neutral-600 uppercase;
+}
+
+.report-table td {
+  @apply border-b border-neutral-200 px-2 py-1.5;
+}
+
+.report-table tfoot td {
+  @apply border-t-2 border-b-0 border-neutral-900 font-bold;
+}
+
+.report-cell-right {
+  @apply text-right tabular-nums;
+}
+
+.report-table th.report-cell-right {
+  @apply text-right;
+}
+
+.report-empty {
+  @apply py-8 text-center text-neutral-500;
+}
+
+.report-level {
+  @apply inline-flex rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.report-level-good {
+  @apply bg-emerald-100 text-emerald-800;
+}
+
+.report-level-warning {
+  @apply bg-amber-100 text-amber-800;
+}
+
+.report-level-serious {
+  @apply bg-red-100 text-red-700;
+}
+
+.report-level-critical {
+  @apply bg-red-600 text-white;
+}
+
+.report-foot {
+  @apply border-t border-neutral-200 pt-3 text-center text-xs text-neutral-400;
+}
+
+.print-root {
+  @apply hidden;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  @page slip {
+    size: 80mm auto;
+    margin: 4mm;
+  }
+
+  body > *:not(.print-root) {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+
+  .print-root {
+    display: block;
+  }
+
+  .print-root .order-slip {
+    @apply m-0 max-w-none rounded-none border-0 p-0;
+    page: slip;
+    width: 72mm;
+  }
+
+  .print-root .report-sheet {
+    @apply max-w-none min-w-0 rounded-none p-0 shadow-none;
+  }
+
+  .report-table tr {
+    break-inside: avoid;
+  }
+
+  .report-table thead {
+    display: table-header-group;
+  }
 }

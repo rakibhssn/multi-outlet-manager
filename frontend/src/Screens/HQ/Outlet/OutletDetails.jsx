@@ -1,93 +1,40 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue } from "jotai";
 import { format } from "date-fns";
 import { LuArrowLeft, LuPencil } from "react-icons/lu";
 import { AnimateButton, StatusComp } from "@/components/custom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DetailCard, PageHeader } from "@/Screens/Layout/DashboardBlocks";
 import StaffList from "@/Screens/HQ/Staff/StaffList";
-import ApiService from "@/lib/ApiService";
+import useCan from "@/hooks/useCan";
+import useRecord from "@/hooks/useRecord";
 import { API_LINK } from "@/lib/API_LINK";
-import { breadcrumbLabels, notificationModal, userData } from "@/lib/Variables";
+import { userData } from "@/lib/Variables";
 import { isDeveloper } from "@/lib/Menus";
 import useScope from "@/hooks/useScope";
 import OutletEntry from "./OutletEntry";
-
-const humanize = (value) =>
-  String(value ?? "")
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+import OutletItemList from "./OutletItemList";
+import OutletStockOut from "./OutletStockOut";
+import OutletSalesChart from "./OutletSalesChart";
+import OutletSummaryCard from "./OutletSummaryCard";
 
 export default function OutletDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const setNotification = useSetAtom(notificationModal);
-  const setLabels = useSetAtom(breadcrumbLabels);
   const { user } = useAtomValue(userData);
   const scope = useScope();
-  const [outlet, setOutlet] = useState(null);
-  const [companyOptions, setCompanyOptions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const can = useCan();
+  const {
+    record: outlet,
+    loading,
+    reload: fetchOutlet,
+  } = useRecord(API_LINK.OutletDetails(id), {
+    breadcrumb: `/hq/outlet/${id}`,
+    errorText: "Failed to load outlet",
+  });
   const [editOpen, setEditOpen] = useState(false);
-
-  const fetchOutlet = useCallback(() => {
-    setLoading(true);
-
-    ApiService.get(API_LINK.OutletDetails(id))
-      .then((res) => {
-        if (res.status === "success") {
-          setOutlet(res?.data);
-          setLabels((prev) => ({ ...prev, [`/hq/outlet/${id}`]: res?.data?.name }));
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
-      })
-      .catch((error) => {
-        setOutlet(null);
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load outlet",
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [id, setLabels, setNotification]);
-
-  useEffect(() => {
-    fetchOutlet();
-  }, [fetchOutlet]);
-
-  useEffect(() => {
-    ApiService.get(API_LINK.Company, { params: { perPage: 100 } })
-      .then((res) => {
-        if (res.status === "success") {
-          setCompanyOptions(
-            (res?.data?.items ?? []).map((item) => ({ label: item.name, value: item.id })),
-          );
-        } else {
-          setNotification({
-            open: true,
-            title: "Error",
-            description: res.message,
-          });
-        }
-      })
-      .catch((error) => {
-        setNotification({
-          open: true,
-          title: "Error",
-          description: error?.response?.data?.message ?? "Failed to load companies",
-        });
-      });
-  }, [setNotification]);
+  const [stockOutOpen, setStockOutOpen] = useState(false);
 
   const back = (
     <AnimateButton
@@ -114,50 +61,55 @@ export default function OutletDetails() {
   if (!outlet || (scope.companyId && outlet.parentId !== scope.companyId)) {
     return (
       <div className="page">
-        <PageHeader title="Outlet not found" subtitle="It may have been deleted." actions={back} />
+        <PageHeader
+          title="Outlet not found"
+          subtitle="It may have been deleted."
+          actions={back}
+        />
       </div>
     );
   }
-
-  const account = outlet.users?.[0];
 
   return (
     <div className="page">
       <PageHeader
         title={outlet.name}
-        subtitle="Outlet details and its staff"
+        subtitle={
+          <span className="page-meta">
+            {outlet.parent &&
+              (isDeveloper(user) ? (
+                <Link
+                  to={`/hq/company/${outlet.parent.id}`}
+                  className="detail-link"
+                >
+                  {outlet.parent.name}
+                </Link>
+              ) : (
+                <span>{outlet.parent.name}</span>
+              ))}
+            <StatusComp type={outlet.status} />
+            {outlet.createdAt && (
+              <span>
+                Since {format(new Date(outlet.createdAt), "dd MMM yyyy")}
+              </span>
+            )}
+          </span>
+        }
         actions={
           <>
             {back}
-            <AnimateButton preIcon={LuPencil} label="Edit Outlet" onClick={() => setEditOpen(true)} />
+            {can("outlets.edit") && (
+              <AnimateButton
+                preIcon={LuPencil}
+                label="Edit Outlet"
+                onClick={() => setEditOpen(true)}
+              />
+            )}
           </>
         }
       />
 
       <div className="detail-grid">
-        <DetailCard
-          title="Outlet"
-          items={[
-            { label: "Name", value: outlet.name },
-            {
-              label: "Company",
-              value:
-                outlet.parent && isDeveloper(user) ? (
-                  <Link to={`/hq/company/${outlet.parent.id}`} className="detail-link">
-                    {outlet.parent.name}
-                  </Link>
-                ) : (
-                  outlet.parent?.name
-                ),
-            },
-            { label: "Status", value: <StatusComp type={outlet.status} /> },
-            { label: "Staff", value: String(outlet._count?.staffs ?? 0) },
-            {
-              label: "Created",
-              value: outlet.createdAt ? format(new Date(outlet.createdAt), "dd MMM yyyy") : null,
-            },
-          ]}
-        />
         <DetailCard
           title="Contact Person"
           items={[
@@ -178,22 +130,43 @@ export default function OutletDetails() {
             { label: "Country", value: outlet.country },
           ]}
         />
-        <DetailCard
-          title="Login Account"
-          items={[
-            { label: "Email", value: account?.email ?? "No account yet" },
-            { label: "Role", value: account ? humanize(account.role) : null },
-            { label: "Status", value: account ? <StatusComp type={account.status} /> : null },
-          ]}
+        <OutletSalesChart
+          data={outlet.summary?.dailySales ?? []}
+          sample={!!outlet.summary?.dailySalesSample}
+        />
+        <OutletSummaryCard
+          summary={outlet.summary}
+          onStockOutClick={() => setStockOutOpen(true)}
         />
       </div>
 
-      <StaffList key={id} branchId={id} onChange={fetchOutlet} />
+      <div className="outlet-lists">
+        {can("staff.view") && (
+          <StaffList
+            key={id}
+            branchId={id}
+            branchName={outlet.name}
+            compact
+            onChange={fetchOutlet}
+          />
+        )}
+        <OutletItemList
+          key={`items-${id}`}
+          outlet={outlet}
+          onChange={fetchOutlet}
+        />
+      </div>
+
+      <OutletStockOut
+        open={stockOutOpen}
+        outlet={outlet}
+        onClose={() => setStockOutOpen(false)}
+        onChange={fetchOutlet}
+      />
 
       <OutletEntry
         open={editOpen}
         outlet={outlet}
-        companyOptions={companyOptions}
         onClose={() => setEditOpen(false)}
         onSaved={() => {
           setEditOpen(false);

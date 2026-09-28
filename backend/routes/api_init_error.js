@@ -1,10 +1,8 @@
-const NOT_FOUND = (res) => {
-  res.status(404).send("Endpoint not found!");
-};
+const response = require("../controller/Response");
 
-const ACCESS_DENIED = (res) => {
-  res.status(403).send("Direct Access denied!");
-};
+const NOT_FOUND = (res) => response.notFoundError(res, "Endpoint not found!");
+
+const ACCESS_DENIED = (res) => response.error(res, "Direct Access denied!", 403);
 
 module.exports = {
   NOT_FOUND,

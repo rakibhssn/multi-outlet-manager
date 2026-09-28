@@ -1,10 +1,16 @@
 const prisma = require("../config/prisma");
+const { Prisma } = require("../../generated/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
 
 const SEARCH_FIELDS = ["name", "description"];
 
 const menuInclude = { _count: { select: { menuItems: true } } };
+
+const outletMenuInclude = (branchId) => ({
+  _count: { select: { menuItems: { where: { itemOutlets: { some: { branchId } } } } } },
+});
+
 
 function pickData(body) {
   return {
@@ -21,29 +27,48 @@ function validateBody(body) {
   return null;
 }
 
+async function withOutletCount(menus) {
+  const list = [].concat(menus);
+  if (!list.length) return menus;
+
+  const rows = await prisma.$queryRaw`
+    SELECT mi."menuId" AS "menuId", COUNT(DISTINCT mio."branchId")::int AS "outlets"
+    FROM "MenuItemOutlet" mio
+    JOIN "MenuItem" mi ON mi."id" = mio."menuItemId"
+    WHERE mi."menuId" IN (${Prisma.join(list.map((menu) => menu.id))})
+    GROUP BY mi."menuId"
+  `;
+  const counts = Object.fromEntries(rows.map((row) => [row.menuId, row.outlets]));
+  const result = list.map((menu) => ({ ...menu, outletCount: counts[menu.id] ?? 0 }));
+
+  return Array.isArray(menus) ? result : result[0];
+}
+
 class Menu {
   async list(req, res) {
     try {
-      const page = branch.paging(req.query);
-      const search = String(req.query.search ?? "").trim();
-      const contains = { contains: search, mode: "insensitive" };
+      const list = branch.listParams(req.query, { sortable: ["name", "status", "createdAt"] });
+      const outletId = (await branch.viewerOutlet(req.user)) ?? req.query.outletId;
       const where = {
         ...(req.query.status ? { status: req.query.status } : {}),
-        ...(search ? { OR: SEARCH_FIELDS.map((field) => ({ [field]: contains })) } : {}),
+        ...(outletId
+          ? { menuItems: { some: { itemOutlets: { some: { branchId: outletId } } } } }
+          : {}),
+        ...branch.searchWhere(list.search, SEARCH_FIELDS),
       };
 
-      const [total, menus] = await prisma.$transaction([
-        prisma.menu.count({ where }),
+      const [menus, total] = await prisma.$transaction([
         prisma.menu.findMany({
           where,
-          include: menuInclude,
-          orderBy: { createdAt: "desc" },
-          skip: page.skip,
-          take: page.take,
+          include: outletId ? outletMenuInclude(outletId) : menuInclude,
+          orderBy: list.orderBy,
+          skip: list.skip,
+          take: list.take,
         }),
+        prisma.menu.count({ where }),
       ]);
 
-      return response.success(res, branch.paginated(menus, total, page), "Menu List Fetched Successfully");
+      return response.list(res, await withOutletCount(menus), total, "Menu List Fetched Successfully");
     } catch (error) {
       return branch.handleError(res, error, "Menu");
     }
@@ -60,7 +85,7 @@ class Menu {
         return response.notFoundError(res, "Menu Not Found!");
       }
 
-      return response.success(res, menu, "Menu Fetched Successfully");
+      return response.success(res, await withOutletCount(menu), "Menu Fetched Successfully");
     } catch (error) {
       return branch.handleError(res, error, "Menu");
     }

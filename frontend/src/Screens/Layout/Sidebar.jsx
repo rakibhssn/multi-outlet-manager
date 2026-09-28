@@ -12,14 +12,20 @@ import SidebarMenus from "./SidebarMenus";
 import SidebarFooterComp from "./SidebarFooterComp";
 
 export default function Sidebar() {
-  const { user } = useAtomValue(userData);
+  const { user, access } = useAtomValue(userData);
 
   return (
-    <SidebarRoot variant="floating" collapsible="icon" className="layout-sidebar">
+    <SidebarRoot
+      variant="floating"
+      collapsible="icon"
+      className="layout-sidebar"
+    >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{isHQAccount(user) ? "Headquarter" : "Outlet"}</SidebarGroupLabel>
-          <SidebarMenus menus={menusFor(user)} />
+          <SidebarGroupLabel>
+            {isHQAccount(user) ? "Headquarter" : "Outlet"}
+          </SidebarGroupLabel>
+          <SidebarMenus menus={menusFor(user, access)} />
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooterComp />

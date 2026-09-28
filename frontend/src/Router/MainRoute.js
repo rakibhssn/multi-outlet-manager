@@ -8,10 +8,10 @@ import { userData } from "@/lib/Variables";
 import { homeFor, isHQAccount } from "@/lib/Menus";
 
 export default function MainRoute() {
-  const { isLoggedIn, user } = useAtomValue(userData);
+  const { isLoggedIn, user, access } = useAtomValue(userData);
 
   const isHQ = isHQAccount(user);
-  const home = homeFor(user);
+  const home = homeFor(user, access);
 
   const guest = (page) => (isLoggedIn ? <Navigate to={home} replace /> : page);
 

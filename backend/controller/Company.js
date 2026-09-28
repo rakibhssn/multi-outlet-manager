@@ -2,31 +2,38 @@ const prisma = require("../config/prisma");
 const response = require("./Response");
 const branch = require("./Branch");
 
-const COMPANY_ACCOUNT = { role: "SUPER_ADMIN", accountType: "HEADQUARTER" };
+const { roleIdFor } = require("../helper/Role_Access");
+const { SUPER_ADMIN_KEY } = require("../helper/Permissions");
+
+const COMPANY_ACCOUNT_TYPE = "HEADQUARTER";
+
+async function companyAccount() {
+  return { roleId: await roleIdFor(SUPER_ADMIN_KEY), accountType: COMPANY_ACCOUNT_TYPE };
+}
 const companyOnly = { parentId: null, ...branch.withoutDeveloper };
 
 class Company {
   async list(req, res) {
     try {
-      const page = branch.paging(req.query);
-      const where = { ...companyOnly, ...branch.searchWhere(req.query) };
+      const list = branch.listParams(req.query, { sortable: ["name", "contactPersonName", "city", "status", "createdAt"] });
+      const where = {
+        ...companyOnly,
+        ...(req.query.status ? { status: req.query.status } : {}),
+        ...branch.searchWhere(list.search),
+      };
 
-      const [total, companies] = await prisma.$transaction([
-        prisma.company.count({ where }),
+      const [companies, total] = await prisma.$transaction([
         prisma.company.findMany({
           where,
           include: branch.accountInclude,
-          orderBy: { createdAt: "desc" },
-          skip: page.skip,
-          take: page.take,
+          orderBy: list.orderBy,
+          skip: list.skip,
+          take: list.take,
         }),
+        prisma.company.count({ where }),
       ]);
 
-      return response.success(
-        res,
-        branch.paginated(companies, total, page),
-        "Company List Fetched Successfully",
-      );
+      return response.list(res, companies, total, "Company List Fetched Successfully");
     } catch (error) {
       return branch.handleError(res, error, "Company");
     }
@@ -62,7 +69,7 @@ class Company {
           users: {
             create: {
               ...(await branch.accountData(req.body.user)),
-              ...COMPANY_ACCOUNT,
+              ...(await companyAccount()),
             },
           },
         },
@@ -89,7 +96,7 @@ class Company {
         });
 
         if (req.body.user) {
-          await branch.saveAccount(tx, req.params.id, req.body.user, COMPANY_ACCOUNT);
+          await branch.saveAccount(tx, req.params.id, req.body.user, await companyAccount());
         }
 
         return tx.company.findUnique({

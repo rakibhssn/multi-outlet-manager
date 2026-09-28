@@ -9,7 +9,9 @@ export default function SidebarFooterComp() {
   const Icon = expanded ? LuPanelLeftClose : LuPanelLeftOpen;
 
   return (
-    <SidebarFooter className={cn("sidebar-footer", expanded && "sidebar-footer-open")}>
+    <SidebarFooter
+      className={cn("sidebar-footer", expanded && "sidebar-footer-open")}
+    >
       <button
         type="button"
         onClick={toggleSidebar}
