@@ -1,6 +1,6 @@
 import { humanize } from "./Functions/Common";
 
-const API_URL = "http://localhost:3050/api/v1/";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:3050/api/v1/";
 
 const STATUS_OPTIONS = [
   { label: "Active", value: "ACTIVE" },

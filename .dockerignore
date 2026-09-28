@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+node_modules
+generated
+frontend/node_modules
+frontend/build
+backend/uploads/*/*
+.agents
+.claude
+.windsurf
+*.log

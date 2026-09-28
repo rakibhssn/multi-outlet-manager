@@ -27,6 +27,7 @@ const limiter = expressLimit({
 
 const app = express();
 app.disable("x-powered-by");
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 app.use(accessLog);
 app.use(
   helmet({
