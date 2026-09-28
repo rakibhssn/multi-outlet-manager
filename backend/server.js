@@ -27,6 +27,7 @@ const limiter = expressLimit({
 
 const app = express();
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
 app.use(accessLog);
 app.use(
   helmet({
@@ -73,22 +74,28 @@ app.use((error, req, res, next) => {
   return response.error(res, "Something went wrong!", 500);
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
-
 syncRoles().catch((error) => console.error("Role sync failed:", error));
 
-server.on("error", (error) => {
-  if (error.code === "EADDRINUSE") {
-    console.error(`Port ${PORT} is already in use.`);
-  } else if (error.code === "EACCES") {
-    console.error(`Permission denied to use port ${PORT}.`);
-  } else {
-    console.error("Server failed to start:", error);
-  }
+// On Vercel the app runs as a serverless function (see api/index.js),
+// so only open a port when running as a normal Node server.
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
 
-  process.exit(1);
-});
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(`Port ${PORT} is already in use.`);
+    } else if (error.code === "EACCES") {
+      console.error(`Permission denied to use port ${PORT}.`);
+    } else {
+      console.error("Server failed to start:", error);
+    }
 
-registerShutdown(server);
+    process.exit(1);
+  });
+
+  registerShutdown(server);
+}
+
+module.exports = app;
